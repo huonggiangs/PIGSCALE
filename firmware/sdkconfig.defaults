@@ -34,6 +34,20 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
 
+# -- WiFi qua ESP32-C6 (esp_hosted 2.12.2 ghim) -------------------------------
+# C6 = slave (firmware nap san). SDIO pin mac dinh khop board (CLK18/CMD19/D0-3=14-17/RST54).
+# Xac nhan qua du an tham chieu C:\Users\16flip\Claude\Projects\Mayxucv3 (cung
+# board, cung chip rev v1.3).
+CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
+# GIAM RAM noi bo cho esp_hosted (tranh esp_timer NO_MEM luc boot):
+#  - task stack cua hosted sang PSRAM
+CONFIG_ESP_HOSTED_DFLT_TASK_FROM_SPIRAM=y
+#  - thu nho hang doi SDIO (mac dinh 20 -> 4)
+CONFIG_ESP_HOSTED_SDIO_TX_Q_SIZE=4
+CONFIG_ESP_HOSTED_SDIO_RX_Q_SIZE=4
+#  - buffer WiFi/LWIP cap phat tu PSRAM thay vi RAM noi bo
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
 # -- Ethernet (EMAC + LAN8720 RMII) -------------------------------------------
 CONFIG_ETH_ENABLED=y
 CONFIG_ETH_USE_ESP32_EMAC=y

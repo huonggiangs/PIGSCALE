@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "wifi_manager.h"
 
 static app_state_t s_state;
 
@@ -103,15 +104,11 @@ void app_state_init(void)
     s_state.history[1].actual_weight_kg = 12 * 282.13f;
     s_state.history[1].is_manual = true;
 
-    /* wifi demo */
-    s_state.wifi_network_count = 3;
-    snprintf(s_state.wifi_networks[0].ssid, sizeof(s_state.wifi_networks[0].ssid), "TRAI_CHANNUOI_5G");
-    s_state.wifi_networks[0].bars = 3; s_state.wifi_networks[0].dbm = -48; s_state.wifi_networks[0].secured = true; s_state.wifi_networks[0].selected = true;
-    snprintf(s_state.wifi_networks[1].ssid, sizeof(s_state.wifi_networks[1].ssid), "TRAI_CHANNUOI_2.4G");
-    s_state.wifi_networks[1].bars = 2; s_state.wifi_networks[1].dbm = -62; s_state.wifi_networks[1].secured = true;
-    snprintf(s_state.wifi_networks[2].ssid, sizeof(s_state.wifi_networks[2].ssid), "Gateway-Van-Phong");
-    s_state.wifi_networks[2].bars = 1; s_state.wifi_networks[2].dbm = -79; s_state.wifi_networks[2].secured = true;
-    s_state.wifi_connected = true;
+    /* Wi-Fi: danh sách thật lấy từ wifi_manager (ESP32-C6/SDIO), không còn mô
+       phỏng — xem app_state_wifi_scan()/app_state_sim_tick(). Rỗng cho tới khi
+       có kết quả quét đầu tiên hoặc đã auto-connect từ NVS. */
+    s_state.wifi_network_count = 0;
+    s_state.wifi_connected = false;
 
     s_state.printer_type = PRINTER_THERMAL_58;
     s_state.bright_mode = false;
@@ -343,8 +340,12 @@ void app_state_sync_now(void)
 }
 
 /* ── Mô phỏng số liệu "sống" ─────────────────────────────────────────────── */
+static void app_state_wifi_sync(void);
+
 void app_state_sim_tick(void)
 {
+    app_state_wifi_sync();
+
     weighing_session_t *w = &s_state.weighing;
     if (w->active && !w->manual_mode && w->p5_state != P5_STATE_LOST) {
         /* tăng dần khối lượng mô phỏng tới khi ổn định quanh kế hoạch */
@@ -529,19 +530,55 @@ void app_state_cancel_ticket(const char *receipt_no, const char *reason, const c
     }
 }
 
-/* ── Cài đặt ─────────────────────────────────────────────────────────────── */
+/* ── Cài đặt — Wi-Fi thật qua ESP32-C6 (SDIO/esp_hosted) ────────────────────
+ * wifi_manager chạy nền (task riêng), API không chặn. app_state chỉ đọc kết
+ * quả quét mới nhất (theo "gen") và trạng thái kết nối mỗi tick — xem
+ * app_state_wifi_sync(), gọi từ app_state_sim_tick(). */
+static uint32_t s_wifi_scan_gen = 0;
+
 void app_state_wifi_scan(void)
 {
-    /* mô phỏng: không đổi danh sách, chỉ minh hoạ hành vi "Quét lại" */
+    wifi_manager_scan_start();
 }
 
-void app_state_wifi_connect(int idx)
+static void app_state_wifi_sync(void)
+{
+    uint32_t gen = 0;
+    wifi_ap_info_t aps[APP_MAX_WIFI_NETWORKS];
+    int n = wifi_manager_get_scan(aps, APP_MAX_WIFI_NETWORKS, &gen);
+    if (gen != s_wifi_scan_gen) {
+        s_wifi_scan_gen = gen;
+        const char *connected_ssid = wifi_manager_get_ssid();
+        bool connected = wifi_manager_is_connected();
+        s_state.wifi_network_count = n;
+        for (int i = 0; i < n; i++) {
+            /* memcpy có giới hạn thay vì snprintf: aps[i].ssid (33 byte) có thể
+               dài hơn wifi_networks[].ssid (32 byte) — GCC -Wformat-truncation
+               không chấp nhận cắt bớt có chủ đích qua snprintf ở đây. */
+            size_t ssid_len = strlen(aps[i].ssid);
+            size_t ssid_cap = sizeof(s_state.wifi_networks[i].ssid) - 1;
+            if (ssid_len > ssid_cap) ssid_len = ssid_cap;
+            memcpy(s_state.wifi_networks[i].ssid, aps[i].ssid, ssid_len);
+            s_state.wifi_networks[i].ssid[ssid_len] = '\0';
+            /* wifi_manager báo 1..4 vạch (theo RSSI thật); UI hiển thị "/4". */
+            s_state.wifi_networks[i].bars = aps[i].bars;
+            s_state.wifi_networks[i].dbm = aps[i].rssi;
+            s_state.wifi_networks[i].secured = !aps[i].open;
+            s_state.wifi_networks[i].selected = connected && strcmp(aps[i].ssid, connected_ssid) == 0;
+        }
+    }
+    s_state.wifi_connected = wifi_manager_is_connected();
+    s_state.wifi_link = s_state.wifi_connected ? LINK_OK
+                       : wifi_manager_is_connecting() ? LINK_WEAK
+                       : LINK_LOST;
+}
+
+void app_state_wifi_connect(int idx, const char *pass)
 {
     if (idx < 0 || idx >= s_state.wifi_network_count) return;
     for (int i = 0; i < s_state.wifi_network_count; i++) s_state.wifi_networks[i].selected = false;
     s_state.wifi_networks[idx].selected = true;
-    s_state.wifi_connected = true;
-    s_state.wifi_link = LINK_OK;
+    wifi_manager_connect(s_state.wifi_networks[idx].ssid, pass);
 }
 
 void app_state_select_station(int idx)

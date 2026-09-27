@@ -8,6 +8,7 @@
 #include "app_state.h"
 
 static lv_obj_t *s_container;
+static lv_obj_t *s_wifi_pw_ta;   /* ô mật khẩu Wi-Fi — đọc thật khi bấm KẾT NỐI */
 static lv_obj_t *s_host;   /* vùng nội dung dựng lại mỗi lần ui_settings_refresh() */
 static lv_obj_t *s_kb;     /* bàn phím dùng chung cho các ô nhập (mật khẩu Wi-Fi, token
                              * Gateway, tài khoản/mật khẩu Camera & P5 Scale) — cùng mẫu
@@ -106,8 +107,9 @@ static lv_obj_t *make_section_title(lv_obj_t *parent, const char *text)
 static void wifi_select_cb(lv_event_t *e)
 {
     int idx = (int)(intptr_t)lv_event_get_user_data(e);
-    app_state_wifi_connect(idx);
-    ui_shell_toast("Đã chọn mạng Wi-Fi");
+    const char *pass = s_wifi_pw_ta ? lv_textarea_get_text(s_wifi_pw_ta) : "";
+    app_state_wifi_connect(idx, pass);
+    ui_shell_toast("Đang kết nối Wi-Fi...");
     ui_settings_refresh();
 }
 
@@ -133,11 +135,10 @@ static void wifi_connect_submit_cb(lv_event_t *e)
         ui_shell_toast("Vui lòng chọn một mạng Wi-Fi trước");
         return;
     }
-    /* Demo: mật khẩu không được xác thực thật (app_state.c chưa mô phỏng lỗi
-     * sai mật khẩu) — nhập bất kỳ rồi bấm KẾT NỐI sẽ áp dụng mạng đã chọn. */
-    app_state_wifi_connect(sel);
+    const char *pass = s_wifi_pw_ta ? lv_textarea_get_text(s_wifi_pw_ta) : "";
+    app_state_wifi_connect(sel, pass);
     char buf[64];
-    snprintf(buf, sizeof(buf), "Đã kết nối Wi-Fi: %s", st->wifi_networks[sel].ssid);
+    snprintf(buf, sizeof(buf), "Đang kết nối Wi-Fi: %s...", st->wifi_networks[sel].ssid);
     ui_shell_toast(buf);
     ui_settings_refresh();
 }
@@ -207,7 +208,7 @@ static void build_wifi_section(lv_obj_t *host)
         lv_obj_set_style_text_color(ssid, UI_COLOR_HEADING, 0);
         lv_obj_t *meta = lv_label_create(info);
         char mbuf[48];
-        snprintf(mbuf, sizeof(mbuf), "%d/3 vạch · %d dBm", w->bars, w->dbm);
+        snprintf(mbuf, sizeof(mbuf), "%d/4 vạch · %d dBm", w->bars, w->dbm);
         lv_label_set_text(meta, mbuf);
         lv_obj_set_style_text_font(meta, UI_FONT_XS, 0);
         lv_obj_set_style_text_color(meta, UI_COLOR_BODY, 0);
@@ -222,7 +223,7 @@ static void build_wifi_section(lv_obj_t *host)
     }
 
     make_field_label(card, "Mật khẩu Wi-Fi");
-    make_password_row(card, "Nhập mật khẩu...");
+    s_wifi_pw_ta = make_password_row(card, "Nhập mật khẩu...");
 
     lv_obj_t *connect_btn = ui_common_button(card, "KẾT NỐI", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
     lv_obj_set_width(connect_btn, LV_PCT(100));

@@ -155,7 +155,7 @@ typedef struct {
 /* ── Wi-Fi (Cài đặt) ─────────────────────────────────────────────────────── */
 typedef struct {
     char ssid[32];
-    int  bars;          /* 1-3 */
+    int  bars;          /* 1-4 (theo RSSI thật từ wifi_manager) */
     int  dbm;
     bool secured;
     bool selected;
@@ -293,8 +293,8 @@ int app_state_search_history(const char *keyword, history_ticket_t *out[], int m
 void app_state_cancel_ticket(const char *receipt_no, const char *reason, const char *actor);
 
 /* ── Cài đặt ─────────────────────────────────────────────────────────────── */
-void app_state_wifi_scan(void);   /* mô phỏng quét lại */
-void app_state_wifi_connect(int idx);
+void app_state_wifi_scan(void);   /* wifi_manager_scan_start() thật qua ESP32-C6 */
+void app_state_wifi_connect(int idx, const char *pass);
 void app_state_select_station(int idx);
 
 #ifdef __cplusplus

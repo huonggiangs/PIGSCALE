@@ -8,7 +8,8 @@
  *  3. Display MIPI-DSI (esp_lvgl_port)
  *  4. Touch GT9271 (I2C)
  *  5. Ethernet PoE (LAN8720 RMII)
- *  6. UI LVGL — app_state + ui_shell (chạy trong LVGL task, theo
+ *  6. WiFi qua ESP32-C6 (SDIO/esp_hosted)
+ *  7. UI LVGL — app_state + ui_shell (chạy trong LVGL task, theo
  *     esp32p4-lvgl-handoff.md)
  *
  * Board: ESP32-P4-WIFI6-POE-ETH (Waveshare) — tái sử dụng nguyên phần bring-up
@@ -29,10 +30,21 @@
 #include "display_driver.h"
 #include "gt9271.h"
 #include "eth_manager.h"
+#include "wifi_manager.h"   /* wifi_manager_init() — WiFi qua ESP32-C6 (SDIO) */
 #include "app_state.h"
 #include "ui_shell.h"
+#include "heap_memory_layout.h"  /* SOC_RESERVE_MEMORY_REGION */
 
 static const char *TAG = "app_main";
+
+/* FIX boot-loop esp_hosted: giữ phần TCM heap (7KB) khỏi allocator → TCB/stack
+ * task không rơi vào TCM (FreeRTOS P4 từ chối → assert app_startup.c:86).
+ * Reserve TỪ _spm_data_end (sau vùng IDF đã reserve) để KHÔNG chồng start
+ * (tránh assert s_prepare_reserved_regions:88). Đặt trong main.c để chắc
+ * chắn được link. Xác nhận qua dự án tham chiếu
+ * C:\Users\16flip\Claude\Projects\Mayxucv3 (cùng board, cùng chip rev v1.3). */
+extern int _spm_data_end;
+SOC_RESERVE_MEMORY_REGION((intptr_t)&_spm_data_end, 0x30102000, tcm_heap_keepout);
 
 /* ── Prototype helper ──────────────────────────────────────────────────────── */
 static esp_err_t nvs_init(void);
@@ -117,14 +129,19 @@ void app_main(void)
        cấu hình/sửa sau. */
     esp_err_t eth_err = eth_manager_init(&eth_cfg);
     if (eth_err == ESP_OK) {
-        ESP_LOGI(TAG, "[5/6] Ethernet PoE LAN8720 OK");
+        ESP_LOGI(TAG, "[5/7] Ethernet PoE LAN8720 OK");
     } else {
-        ESP_LOGE(TAG, "[5/6] Ethernet LOI (%s) — tiep tuc khong mang. "
+        ESP_LOGE(TAG, "[5/7] Ethernet LOI (%s) — tiep tuc khong mang. "
                        "Kiem tra MDC/MDIO/phy_addr/reset trong board_config.h",
                  esp_err_to_name(eth_err));
     }
 
-    /* 6. UI LVGL — app_state (dữ liệu mô phỏng) + ui_shell (toàn bộ giao diện
+    /* 6. Wi-Fi qua ESP32-C6 (SDIO/esp_hosted) — init nền, non-fatal.
+       Auto-connect nếu đã lưu SSID/pass; màn CÀI ĐẶT dùng để quét/đổi mạng. */
+    wifi_manager_init();
+    ESP_LOGI(TAG, "[6/7] WiFi (ESP32-C6) dang khoi tao nen");
+
+    /* 7. UI LVGL — app_state (dữ liệu mô phỏng) + ui_shell (toàn bộ giao diện
      *    theo esp32p4-lvgl-handoff.md) — mọi lv_* call phải bọc
      *    lvgl_port_lock()/lvgl_port_unlock() (xem display_driver.c). --------- */
     app_state_init();
@@ -134,7 +151,7 @@ void app_main(void)
     } else {
         ESP_LOGE(TAG, "lvgl_port_lock thất bại — không dựng được UI");
     }
-    ESP_LOGI(TAG, "[6/6] UI LVGL (Pig Weigh) OK");
+    ESP_LOGI(TAG, "[7/7] UI LVGL (Pig Weigh) OK");
 
     ESP_LOGI(TAG, "══ KHỞI ĐỘNG HOÀN TẤT ══");
 

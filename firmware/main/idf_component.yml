@@ -22,3 +22,10 @@ dependencies:
   ## Macros API giống hệt bản espressif: JD9365_PANEL_BUS_DSI_2CH_CONFIG,
   ## JD9365_800_1280_PANEL_60HZ_DPI_CONFIG, esp_lcd_new_panel_jd9365().
   waveshare/esp_lcd_jd9365_10_1: "*"
+
+  ## WiFi qua ESP32-C6 (SDIO). GHIM esp_hosted 2.12.2 — đã xác nhận qua dự án
+  ## tham chiếu C:\Users\16flip\Claude\Projects\Mayxucv3 (cùng board, cùng chip
+  ## rev v1.3): bản "*" hiện là 2.12.9, gây boot-loop (esp_timer NO_MEM) trên
+  ## đúng revision chip này. KHÔNG tự ý nâng version nếu chưa test lại.
+  espressif/esp_hosted: "==2.12.2"
+  espressif/esp_wifi_remote: "*"

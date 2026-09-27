@@ -13,6 +13,7 @@ idf_component_register(
         "display/display_driver.c"
         "touch/gt9271.c"
         "network/eth_manager.c"
+        "network/wifi_manager.c"
         "ui/app_state.c"
         "ui/ui_common.c"
         "ui/ui_shell.c"
@@ -40,6 +41,8 @@ idf_component_register(
         esp_eth
         esp_netif
         esp_event
+        esp_wifi
+        espressif__esp_wifi_remote
         esp_timer
         esp_lvgl_port
         esp_hw_support
