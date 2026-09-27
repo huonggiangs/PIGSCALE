@@ -51,7 +51,8 @@ static void sync_badge_event_cb(lv_event_t *e);
 /* ────────────────────────────────────────────────────────────────────────
  * THANH TRẠNG THÁI (mục 4.2)
  * ──────────────────────────────────────────────────────────────────────── */
-static lv_obj_t *make_status_cluster(lv_obj_t *parent, const char *label, lv_obj_t **out_dot)
+static lv_obj_t *make_status_cluster_ex(lv_obj_t *parent, const char *label, lv_obj_t **out_dot,
+                                         const void *icon_src, lv_obj_t **out_icon)
 {
     lv_obj_t *c = lv_obj_create(parent);
     lv_obj_remove_style_all(c);
@@ -61,6 +62,16 @@ static lv_obj_t *make_status_cluster(lv_obj_t *parent, const char *label, lv_obj
     lv_obj_set_size(c, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(c, LV_OBJ_FLAG_SCROLLABLE);
 
+    /* Icon (nếu có) dựng NGAY THỨ TỰ ĐÚNG từ đầu — KHÔNG dùng
+       lv_obj_move_to_index() để chèn lại sau, vì đã xác nhận qua log
+       (lv_obj_get_width) rằng làm vậy khiến "right" (cha, LV_SIZE_CONTENT)
+       không tính lại đúng kích thước tự động, co về gần như 0 và đẩy các
+       cụm trạng thái ra ngoài màn hình (x âm) — đây là lý do Wi-Fi/P5/Cam
+       "biến mất" khỏi header. */
+    if (icon_src && out_icon) {
+        *out_icon = ui_common_icon(c, icon_src, lv_color_white());
+    }
+
     *out_dot = ui_common_status_dot(c, LINK_OK);
 
     lv_obj_t *lbl = lv_label_create(c);
@@ -68,6 +79,11 @@ static lv_obj_t *make_status_cluster(lv_obj_t *parent, const char *label, lv_obj
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
     lv_obj_set_style_text_font(lbl, UI_FONT_XS, 0);
     return c;
+}
+
+static lv_obj_t *make_status_cluster(lv_obj_t *parent, const char *label, lv_obj_t **out_dot)
+{
+    return make_status_cluster_ex(parent, label, out_dot, NULL, NULL);
 }
 
 static void build_status_bar(lv_obj_t *parent)
@@ -113,10 +129,7 @@ static void build_status_bar(lv_obj_t *parent)
        để thấy trạng thái ĐÃ KẾT NỐI kèm cường độ tín hiệu thật (đổi màu theo
        wifi_link — suy ra từ số vạch RSSI thật trong app_state_wifi_sync()),
        không chỉ một chấm tròn chung như P5/Cam. */
-    lv_obj_t *wifi_cluster = make_status_cluster(right, "Wi-Fi", &s_dot_wifi);
-    s_wifi_icon = ui_common_icon(wifi_cluster, &img_icon_wifi_signal, lv_color_white());
-    lv_obj_move_to_index(s_wifi_icon, 0);   /* đặt icon TRƯỚC chấm trạng thái */
-
+    make_status_cluster_ex(right, "Wi-Fi", &s_dot_wifi, &img_icon_wifi_signal, &s_wifi_icon);
     make_status_cluster(right, "P5 Scale", &s_dot_p5);
     make_status_cluster(right, "Cam", &s_dot_cam);
 
