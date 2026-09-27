@@ -541,6 +541,11 @@ void app_state_wifi_scan(void)
     wifi_manager_scan_start();
 }
 
+bool app_state_wifi_is_scanning(void)
+{
+    return wifi_manager_is_scanning();
+}
+
 static void app_state_wifi_sync(void)
 {
     uint32_t gen = 0;

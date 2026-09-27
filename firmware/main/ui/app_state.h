@@ -294,6 +294,7 @@ void app_state_cancel_ticket(const char *receipt_no, const char *reason, const c
 
 /* ── Cài đặt ─────────────────────────────────────────────────────────────── */
 void app_state_wifi_scan(void);   /* wifi_manager_scan_start() thật qua ESP32-C6 */
+bool app_state_wifi_is_scanning(void);   /* để UI hiện "Đang quét..." + khoá nút */
 void app_state_wifi_connect(int idx, const char *pass);
 void app_state_select_station(int idx);
 

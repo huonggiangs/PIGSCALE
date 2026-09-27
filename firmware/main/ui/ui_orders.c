@@ -108,13 +108,23 @@ static void build_order_card(lv_obj_t *parent, order_t *o, bool any_other_weighi
     lv_obj_set_style_text_font(cust, UI_FONT_BODY, 0);
     lv_obj_set_style_text_color(cust, UI_COLOR_BODY, 0);
 
-    lv_obj_t *plan = lv_label_create(card);
+    /* Kế hoạch + Xe cùng 1 hàng (kế hoạch trái, biển số phải) theo đúng
+       thiết kế — trước đó xếp thành 2 dòng riêng là sai. */
+    lv_obj_t *plan_row = lv_obj_create(card);
+    lv_obj_remove_style_all(plan_row);
+    lv_obj_set_flex_flow(plan_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(plan_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(plan_row, LV_PCT(100));
+    lv_obj_set_height(plan_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(plan_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *plan = lv_label_create(plan_row);
     snprintf(buf, sizeof(buf), "Kế hoạch: %d con", o->planned_qty);
     lv_label_set_text(plan, buf);
     lv_obj_set_style_text_font(plan, UI_FONT_BODY, 0);
     lv_obj_set_style_text_color(plan, UI_COLOR_BODY, 0);
 
-    lv_obj_t *plate = lv_label_create(card);
+    lv_obj_t *plate = lv_label_create(plan_row);
     snprintf(buf, sizeof(buf), "Xe: %s", o->plate);
     lv_label_set_text(plate, buf);
     lv_obj_set_style_text_font(plate, UI_FONT_BODY, 0);

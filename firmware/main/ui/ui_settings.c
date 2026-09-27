@@ -13,6 +13,7 @@ static lv_obj_t *s_host;   /* vùng nội dung dựng lại mỗi lần ui_setti
 static lv_obj_t *s_kb;     /* bàn phím dùng chung cho các ô nhập (mật khẩu Wi-Fi, token
                              * Gateway, tài khoản/mật khẩu Camera & P5 Scale) — cùng mẫu
                              * với ô tìm kiếm ở ui_history.c */
+static bool s_wifi_show_all;   /* true = hiện đủ danh sách; false = thu gọn khi đã kết nối */
 
 /* ── màn khoá PIN (Nhân viên cân) ────────────────────────────────────────── */
 static lv_obj_t *s_lock_pin_dots_host;
@@ -116,10 +117,20 @@ static void wifi_select_cb(lv_event_t *e)
 static void wifi_scan_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
-    /* app_state_wifi_scan() đã khai báo ở app_state.h ("Quét lại") — gắn vào
-     * đây vì mục 4.10 không có nút riêng khác dùng hàm này. */
+    /* Quét WiFi qua ESP32-C6/SDIO có thể mất 15-30 giây thật (đã đo được khi
+       vừa kết nối vừa quét) — trước đây bấm xong không có phản hồi gì nên
+       cảm giác "không ăn", bấm nhiều lần cũng vô ích vì wifi_manager tự
+       chặn quét chồng quét. Hiện rõ "Đang quét..." + khoá nút để không còn
+       cảm giác đó; danh sách tự cập nhật khi có kết quả (app_state_wifi_sync
+       chạy mỗi tick, không cần bấm lại). */
     app_state_wifi_scan();
-    ui_shell_toast("Đã quét lại danh sách Wi-Fi");
+    ui_settings_refresh();
+}
+
+static void wifi_toggle_list_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    s_wifi_show_all = !s_wifi_show_all;
     ui_settings_refresh();
 }
 
@@ -159,6 +170,8 @@ static void build_wifi_section(lv_obj_t *host)
     lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE);
     make_section_title(head, "WI-FI");
 
+    bool scanning = app_state_wifi_is_scanning();
+
     lv_obj_t *scan_btn = lv_button_create(head);
     lv_obj_set_style_bg_opa(scan_btn, LV_OPA_TRANSP, 0);
     lv_obj_set_style_shadow_width(scan_btn, 0, 0);
@@ -170,15 +183,27 @@ static void build_wifi_section(lv_obj_t *host)
     lv_obj_set_style_pad_column(scan_row, 4, 0);
     lv_obj_set_size(scan_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(scan_row, LV_OBJ_FLAG_SCROLLABLE);
-    ui_common_icon(scan_row, &img_icon_refresh, UI_COLOR_PRIMARY);
+    ui_common_icon(scan_row, &img_icon_refresh, scanning ? UI_COLOR_ICON : UI_COLOR_PRIMARY);
     lv_obj_t *scan_lbl = lv_label_create(scan_row);
-    lv_label_set_text(scan_lbl, "Quét lại");
-    lv_obj_set_style_text_color(scan_lbl, UI_COLOR_PRIMARY, 0);
+    lv_label_set_text(scan_lbl, scanning ? "Đang quét..." : "Quét lại");
+    lv_obj_set_style_text_color(scan_lbl, scanning ? UI_COLOR_ICON : UI_COLOR_PRIMARY, 0);
     lv_obj_set_style_text_font(scan_lbl, UI_FONT_BODY_BOLD, 0);
     lv_obj_add_event_cb(scan_btn, wifi_scan_cb, LV_EVENT_CLICKED, NULL);
+    if (scanning) lv_obj_add_state(scan_btn, LV_STATE_DISABLED);
+
+    /* Thu gọn danh sách khi đã kết nối: chỉ hiện mạng đang dùng + nút "Đổi
+       mạng" để bung lại đủ danh sách — tránh danh sách dài gây rối khi
+       không cần đổi mạng. */
+    bool collapse = st->wifi_connected && !s_wifi_show_all;
+    if (st->wifi_connected) {
+        lv_obj_t *change_btn = ui_common_button_outline(card, s_wifi_show_all ? "Thu gọn" : "Đổi mạng",
+                                                          UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+        lv_obj_add_event_cb(change_btn, wifi_toggle_list_cb, LV_EVENT_CLICKED, NULL);
+    }
 
     for (int i = 0; i < st->wifi_network_count; i++) {
         wifi_network_t *w = &st->wifi_networks[i];
+        if (collapse && !w->selected) continue;   /* thu gọn: chỉ hiện mạng đang chọn */
         lv_obj_t *row = lv_obj_create(card);
         lv_obj_remove_style_all(row);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
@@ -383,13 +408,7 @@ static void build_printer_section(lv_obj_t *host)
         : ui_common_button_outline(row, "Nhiệt 58mm", UI_COLOR_BORDER, UI_COLOR_BODY, UI_FONT_BODY_BOLD);
     lv_obj_set_flex_grow(b1, 1);
     lv_obj_add_event_cb(b1, printer_select_cb, LV_EVENT_CLICKED, (void *)(intptr_t)PRINTER_THERMAL_58);
-
-    bool a5_sel = (st->printer_type == PRINTER_A5);
-    lv_obj_t *b2 = a5_sel
-        ? ui_common_button(row, "A5", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD)
-        : ui_common_button_outline(row, "A5", UI_COLOR_BORDER, UI_COLOR_BODY, UI_FONT_BODY_BOLD);
-    lv_obj_set_flex_grow(b2, 1);
-    lv_obj_add_event_cb(b2, printer_select_cb, LV_EVENT_CLICKED, (void *)(intptr_t)PRINTER_A5);
+    /* Đã bỏ lựa chọn khổ A5 theo yêu cầu — máy chỉ hỗ trợ in nhiệt 58mm. */
 
     lv_obj_t *preview_btn = ui_common_button_outline(card, "Xem trước phiếu", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
     lv_obj_set_width(preview_btn, LV_PCT(100));
