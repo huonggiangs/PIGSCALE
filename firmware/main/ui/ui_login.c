@@ -125,7 +125,11 @@ lv_obj_t *ui_login_create(lv_obj_t *parent)
         lv_obj_t *btn = lv_button_create(emp_row);
         lv_obj_set_style_radius(btn, 12, 0);
         lv_obj_set_style_shadow_width(btn, 0, 0);
-        lv_obj_set_size(btn, 150, 74);
+        /* LV_SIZE_CONTENT thay vì 150x74 cố định: kích thước chữ có thể đổi
+           (vd. phóng 1.5x) — nút phải tự co giãn theo, không bị cắt/tràn. */
+        lv_obj_set_size(btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_style_pad_hor(btn, 20, 0);
+        lv_obj_set_style_pad_ver(btn, 14, 0);
         lv_obj_set_style_bg_opa(btn, LV_OPA_10, 0);
         lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
 

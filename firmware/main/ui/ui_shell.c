@@ -28,6 +28,7 @@ static lv_obj_t *s_nav_label[TAB_COUNT];
 /* status bar widgets cần cập nhật động */
 static lv_obj_t *s_clock_label;
 static lv_obj_t *s_dot_wifi, *s_dot_p5, *s_dot_cam;
+static lv_obj_t *s_wifi_icon;   /* icon sóng Wi-Fi trên header — màu đổi theo wifi_link */
 /* sub bar widgets */
 static lv_obj_t *s_sync_badge;
 static lv_obj_t *s_sync_badge_label;
@@ -108,7 +109,14 @@ static void build_status_bar(lv_obj_t *parent)
     lv_obj_align(right, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_clear_flag(right, LV_OBJ_FLAG_SCROLLABLE);
 
-    make_status_cluster(right, "Wi-Fi", &s_dot_wifi);
+    /* Cụm Wi-Fi riêng: thêm icon sóng Wi-Fi (bên cạnh chấm trạng thái sẵn có)
+       để thấy trạng thái ĐÃ KẾT NỐI kèm cường độ tín hiệu thật (đổi màu theo
+       wifi_link — suy ra từ số vạch RSSI thật trong app_state_wifi_sync()),
+       không chỉ một chấm tròn chung như P5/Cam. */
+    lv_obj_t *wifi_cluster = make_status_cluster(right, "Wi-Fi", &s_dot_wifi);
+    s_wifi_icon = ui_common_icon(wifi_cluster, &img_icon_wifi_signal, lv_color_white());
+    lv_obj_move_to_index(s_wifi_icon, 0);   /* đặt icon TRƯỚC chấm trạng thái */
+
     make_status_cluster(right, "P5 Scale", &s_dot_p5);
     make_status_cluster(right, "Cam", &s_dot_cam);
 
@@ -402,6 +410,7 @@ void ui_shell_refresh_chrome(void)
     lv_label_set_text(s_clock_label, buf);
 
     lv_obj_set_style_bg_color(s_dot_wifi, ui_common_link_color(st->wifi_link), 0);
+    lv_obj_set_style_image_recolor(s_wifi_icon, ui_common_link_color(st->wifi_link), 0);
     lv_obj_set_style_bg_color(s_dot_p5, ui_common_link_color(st->p5_link), 0);
     lv_obj_set_style_bg_color(s_dot_cam, ui_common_link_color(st->camera_link), 0);
 

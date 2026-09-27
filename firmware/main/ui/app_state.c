@@ -568,9 +568,13 @@ static void app_state_wifi_sync(void)
         }
     }
     s_state.wifi_connected = wifi_manager_is_connected();
-    s_state.wifi_link = s_state.wifi_connected ? LINK_OK
-                       : wifi_manager_is_connecting() ? LINK_WEAK
-                       : LINK_LOST;
+    if (s_state.wifi_connected) {
+        /* Icon header phản ánh CƯỜNG ĐỘ tín hiệu thật (RSSI), không chỉ
+           on/off: 3-4 vạch = tốt, 1-2 vạch = yếu. */
+        s_state.wifi_link = (wifi_manager_get_bars() >= 3) ? LINK_OK : LINK_WEAK;
+    } else {
+        s_state.wifi_link = wifi_manager_is_connecting() ? LINK_WEAK : LINK_LOST;
+    }
 }
 
 void app_state_wifi_connect(int idx, const char *pass)

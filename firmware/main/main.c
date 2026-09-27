@@ -49,6 +49,7 @@ SOC_RESERVE_MEMORY_REGION((intptr_t)&_spm_data_end, 0x30102000, tcm_heap_keepout
 /* ── Prototype helper ──────────────────────────────────────────────────────── */
 static esp_err_t nvs_init(void);
 
+
 /* ── app_main ──────────────────────────────────────────────────────────────── */
 void app_main(void)
 {
