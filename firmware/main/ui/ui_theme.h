@@ -135,9 +135,12 @@ LV_IMAGE_DECLARE(img_camera_01_frame);
 #define UI_HOR_RES            800
 #define UI_VER_RES             1280
 
-#define UI_STATUSBAR_H        80   /* gốc 64 * 1.25 */
-#define UI_SUBBAR_H            50   /* gốc 40 * 1.25 */
-#define UI_BOTTOMNAV_H        100   /* gốc 80 * 1.25 */
+/* x1.5 thêm vì toàn bộ font UI đã phóng to 1.5x (xem main/ui/fonts/) — 3 vùng
+   cố định này KHÔNG tự co giãn theo nội dung (không dùng LV_SIZE_CONTENT) nên
+   phải tự tay nhân theo, nếu không tiêu đề/nhãn tab dưới sẽ bị tràn/bó khung. */
+#define UI_STATUSBAR_H        120   /* gốc 64 * 1.25 * 1.5 */
+#define UI_SUBBAR_H            75   /* gốc 40 * 1.25 * 1.5 */
+#define UI_BOTTOMNAV_H        150   /* gốc 80 * 1.25 * 1.5 */
 #define UI_CONTENT_Y          (UI_STATUSBAR_H + UI_SUBBAR_H)
 #define UI_CONTENT_H          (UI_VER_RES - UI_STATUSBAR_H - UI_SUBBAR_H - UI_BOTTOMNAV_H)
 
