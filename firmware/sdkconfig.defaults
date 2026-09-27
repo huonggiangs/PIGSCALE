@@ -1,0 +1,89 @@
+# ==============================================================================
+# sdkconfig.defaults -- CAN MAY XUC V3
+# Board: ESP32-P4-WIFI6-POE-ETH  |  ESP-IDF 5.5.4  |  LVGL v9
+# ==============================================================================
+
+# -- Target --------------------------------------------------------------------
+CONFIG_IDF_TARGET="esp32p4"
+
+# -- Flash ---------------------------------------------------------------------
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# -- Partition Table -----------------------------------------------------------
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# -- PSRAM (32 MB Octal @ 200 MHz) ---------------------------------------------
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_SPEED_200M=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+
+# -- CPU & Cache ---------------------------------------------------------------
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# -- FreeRTOS ------------------------------------------------------------------
+CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+
+# -- Logging -------------------------------------------------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+
+# -- Ethernet (EMAC + LAN8720 RMII) -------------------------------------------
+CONFIG_ETH_ENABLED=y
+CONFIG_ETH_USE_ESP32_EMAC=y
+CONFIG_ETH_PHY_INTERFACE_RMII=y
+CONFIG_ETH_RMII_CLK_INPUT=y
+CONFIG_ETH_RMII_CLK_IN_GPIO=50
+CONFIG_ETH_USE_SPI_ETHERNET=n
+
+# -- Experimental (MIPI-DSI yeu cau) ------------------------------------------
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+
+# -- NVS -----------------------------------------------------------------------
+CONFIG_NVS_ASSERT_ERROR_CHECK=n
+
+# -- Touch (GT9271 ho tro 10 diem, mac dinh chi la 5) -------------------------
+CONFIG_ESP_LCD_TOUCH_MAX_POINTS=10
+
+# -- Bootloader (giu nho de khong vuot 0x6000 bytes tai offset 0x8000) --------
+CONFIG_BOOTLOADER_COMPILER_OPTIMIZATION_SIZE=y
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+
+# -- Heap cho LVGL (BAT BUOC tren UI nhieu man hinh nay) ----------------------
+# CONFIG_LV_MEM_SIZE_KILOBYTES=64 (builtin allocator, mac dinh) la mot pool
+# tinh co dinh RIENG cua LVGL, KHONG lien quan gi den 32MB PSRAM. Da xac nhan
+# qua disassembly: pool nay het chỗ ngay khi dung man hinh dau tien (nhieu
+# man hinh x nhieu widget), lv_malloc() tra ve NULL, code goi tiep
+# lv_style_init(NULL) -> memset(NULL,...) -> "Guru Meditation Store access
+# fault" crash-loop ngay sau khi len UI — KHONG lien quan gi den font hay
+# stack size (da thu ca hai, khong sua duoc). Chuyen LVGL sang dung
+# malloc()/free() chuan (CLIB) + cho phep malloc() chuan tran sang PSRAM khi
+# het RAM noi bo, thay vi bi gioi han trong 1 pool 64KB co dinh.
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_SPIRAM_USE_MALLOC=y
+
+# -- Watchdog: neu 1 task treo (vd: doc panel MIPI-DSI khong phan hoi —
+# esp_lcd_panel_io_dbi.c cho_doc ID khong co timeout), tu dong panic + reboot
+# thay vi treo man hinh den vinh vien cho den khi rut nguon lai bang tay. -----
+CONFIG_ESP_TASK_WDT_PANIC=y
+
+# -- LVGL v9 (qua esp_lvgl_port) -----------------------------------------------
+# Cac font Inter tu bien (main/ui/fonts/font_inter_*.c) da duoc regenerate
+# bang lv_font_conv --no-compress (bitmap_format=0, PLAIN) — KHONG duoc bat
+# CONFIG_LV_USE_FONT_COMPRESSED: da xac nhan thuc te bat option nay (dung font
+# nen RLE, bitmap_format=1) gay Guru Meditation "Store access fault" random
+# trong get_local_style/lv_obj_allocate_spec_attr (heap bi hong) ngay sau khi
+# man hinh dau tien ve — nghi ngo bug trong duong giai nen cua LVGL 9.2.2 kho
+# lan theo den tan cung, nen chon huong an toan la khong dung font nen.
+# Font Montserrat (bat cac size su dung trong ui_main.c)
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_18=y
+CONFIG_LV_FONT_MONTSERRAT_20=y
+CONFIG_LV_FONT_MONTSERRAT_48=y

@@ -1,0 +1,13 @@
+# ESP-IDF build artifacts (regenerate voi idf.py build)
+build/
+firmware/build/
+firmware/managed_components/
+# dependencies.lock GIU LAI (ghim dung phien ban component, vd: waveshare/esp_lcd_jd9365_10_1)
+
+# Log tam thoi
+firmware/build/log/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db

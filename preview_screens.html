@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Cân Máy Xúc V3 — Xem trước</title>
+<link href="https://fonts.googleapis.com/css2?family=Alumni+Sans:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,600&display=swap" rel="stylesheet">
+<style>
+@font-face {
+  font-family: 'Hubot Sans';
+  src: url('https://cdn.jsdelivr.net/npm/hubot-sans@1.0.0/fonts/HubotSans.woff2') format('woff2-variations'),
+       url('https://cdn.jsdelivr.net/npm/hubot-sans@1.0.0/fonts/HubotSans.woff') format('woff');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hubot Sans';
+  src: url('https://cdn.jsdelivr.net/npm/hubot-sans@1.0.0/fonts/HubotSans-Italic.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+</style>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0A0A0A; display:flex; flex-direction:column; align-items:center; padding:20px 12px; font-family:'Hubot Sans','Alumni Sans',sans-serif; min-height:100vh; }
+h1 { color:#F5C800; font-size:14px; margin-bottom:3px; letter-spacing:2px; text-transform:uppercase; }
+.meta { color:#555; font-size:11px; margin-bottom:12px; }
+
+.device { position:relative; width:400px; height:640px; border:2px solid #2A2A2A; border-radius:10px; overflow:hidden; box-shadow:0 0 60px rgba(245,200,0,.1),0 8px 32px rgba(0,0,0,.8); }
+.screen { position:absolute; top:0; left:0; width:800px; height:1280px; transform-origin:top left; transform:scale(.5); background:#1A1A1A; overflow:hidden; display:none; }
+.screen.active { display:block; }
+
+:root {
+  --bg:#1A1A1A; --card:#242424; --acc:#F5C800; --acc-dim:#B8960A;
+  --pri:#FFFFFF; --sec:#888888; --dim:#555555;
+  --border:#333333; --nav:#111111;
+  --r-sm:8px; --r-md:16px;
+  --p-sm:12px; --p-md:24px;
+  --hdr:96px; --nav-h:128px;
+  --f-xs:18px; --f-tiny:20px; --f-sm:22px; --f-md:32px; --f-lg:44px; --f-xl:72px;
+}
+.f-xs{font-size:var(--f-xs)} .f-tiny{font-size:var(--f-tiny)} .f-sm{font-size:var(--f-sm)} .f-md{font-size:var(--f-md)} .f-lg{font-size:var(--f-lg)} .f-xl{font-size:var(--f-xl)}
+.c-acc{color:var(--acc)} .c-pri{color:var(--pri)} .c-sec{color:var(--sec)} .c-dim{color:var(--dim)}
+.bold{font-weight:800} .semi{font-weight:700}
+.card { background:var(--card); border-radius:var(--r-sm); border:1px solid var(--border); padding:var(--p-md); }
+
+/* Header */
+.hdr { position:absolute; top:0; left:0; right:0; height:var(--hdr); background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--border); }
+.hdr-time { display:flex; flex-direction:column; line-height:1.2; }
+.hdr-tit { font-size:var(--f-md); font-weight:800; color:var(--acc); letter-spacing:2px; }
+.hdr-ico { font-size:var(--f-tiny); color:var(--sec); display:flex; align-items:center; gap:8px; }
+
+/* Nav */
+.nav-bar { position:absolute; bottom:0; left:0; right:0; height:var(--nav-h); background:var(--nav); border-top:1px solid var(--border); display:flex; }
+.ntab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; cursor:pointer; color:var(--dim); font-size:var(--f-tiny); font-weight:700; letter-spacing:1px; transition:.15s; user-select:none; }
+.ntab svg { width:52px; height:52px; }
+.ntab.active { color:var(--acc); border-top:3px solid var(--acc); background:#1A1A1A; }
+
+/* Overlay / Modal */
+.overlay { position:absolute; inset:0; background:rgba(0,0,0,.78); display:flex; align-items:center; justify-content:center; z-index:100; }
+.modal { background:#1E1E1E; border:2px solid var(--acc); border-radius:var(--r-md); padding:var(--p-md); width:680px; }
+.modal-title { font-size:var(--f-md); font-weight:800; color:var(--pri); display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.xbtn { width:44px; height:44px; border-radius:50%; background:#333; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--sec); font-size:24px; flex-shrink:0; }
+.xbtn:hover { background:#444; color:#fff; }
+
+/* Numpad */
+.np-disp { background:#111; border-radius:var(--r-sm); padding:16px var(--p-md); margin:12px 0; text-align:center; }
+.np-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--p-sm); margin:12px 0; }
+.np-btn { background:#2E2E2E; border:none; border-radius:var(--r-sm); color:var(--pri); font-family:'Hubot Sans','Alumni Sans',sans-serif; font-size:var(--f-md); font-weight:800; padding:18px; cursor:pointer; transition:.1s; }
+.np-btn:active { background:#444; transform:scale(.97); } .np-btn.del { color:var(--acc); }
+.btn-row { display:flex; gap:var(--p-sm); margin-top:var(--p-sm); }
+.btn-cancel { flex:1; padding:22px; background:#333; border:none; border-radius:var(--r-sm); color:var(--sec); font-family:'Hubot Sans','Alumni Sans',sans-serif; font-size:var(--f-md); font-weight:700; cursor:pointer; }
+.btn-ok { flex:2; padding:22px; background:var(--acc); border:none; border-radius:var(--r-sm); color:#1A1A1A; font-family:'Hubot Sans','Alumni Sans',sans-serif; font-size:var(--f-md); font-weight:800; cursor:pointer; }
+.btn-cancel:hover{background:#3A3A3A} .btn-ok:hover{background:var(--acc-dim)}
+
+/* Progress */
+.prog { background:#333; border-radius:18px; height:36px; position:relative; overflow:hidden; }
+.prog-fill { height:100%; background:var(--acc); border-radius:18px; transition:width .4s; }
+.prog-lbl { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:var(--f-tiny); font-weight:700; color:#fff; }
+
+/* Badge */
+.badge { display:inline-flex; align-items:center; padding:6px 16px; border-radius:var(--r-sm); font-size:var(--f-tiny); font-weight:700; }
+
+/* CTA */
+.btn-pri { width:100%; padding:28px; background:var(--acc); border:none; border-radius:var(--r-md); color:#1A1A1A; font-family:'Hubot Sans','Alumni Sans',sans-serif; font-size:var(--f-md); font-weight:800; cursor:pointer; letter-spacing:1px; transition:.15s; }
+.btn-pri:hover{background:var(--acc-dim)} .btn-pri.red{background:#E53935;color:#fff} .btn-pri.red:hover{background:#C62828}
+
+/* PIN dots */
+.pin-dots { display:flex; justify-content:center; gap:20px; padding:16px 0; }
+.pin-dot { width:28px; height:28px; border-radius:50%; border:3px solid var(--sec); background:transparent; transition:.1s; }
+.pin-dot.on { background:var(--acc); border-color:var(--acc); }
+.pin-err { color:#EF4444; font-size:var(--f-sm); text-align:center; min-height:28px; margin-bottom:4px; }
+
+/* Filter pill */
+.pill { padding:14px 24px; border-radius:var(--r-md); background:#2A2A2A; color:var(--sec); font-size:var(--f-tiny); font-weight:700; cursor:pointer; border:none; font-family:'Hubot Sans','Alumni Sans',sans-serif; white-space:nowrap; }
+.pill.on { background:var(--acc); color:#1A1A1A; } .pill:hover:not(.on){background:#333;}
+
+/* Sensor */
+.srow { display:flex; align-items:center; background:#1A1A1A; border:1px solid #2A2A2A; border-radius:var(--r-sm); padding:12px var(--p-md); height:54px; margin-bottom:6px; }
+.sdot { width:14px; height:14px; border-radius:50%; background:#22C55E; flex-shrink:0; margin-right:16px; }
+.sdot.w { background:#EAB308; }
+
+/* USB row */
+.usb-row { display:flex; align-items:center; gap:var(--p-md); background:#2A2A2A; border:1px solid var(--border); border-radius:var(--r-sm); padding:20px var(--p-md); cursor:pointer; transition:.15s; }
+.usb-row:hover{border-color:var(--acc)} .usb-row.off{cursor:default;opacity:.5} .usb-row.off:hover{border-color:var(--border)}
+
+/* Range slider */
+input[type=range] { -webkit-appearance:none; width:100%; height:8px; background:#333; border-radius:4px; outline:none; cursor:pointer; margin:10px 0; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:36px; height:36px; border-radius:50%; background:var(--acc); cursor:pointer; box-shadow:0 0 6px rgba(0,0,0,.4); }
+
+/* Toggle */
+.tog { width:80px; height:40px; border-radius:20px; position:relative; cursor:pointer; flex-shrink:0; transition:.2s; }
+.tog.on { background:var(--acc); } .tog.off { background:#444; }
+.tog-k { position:absolute; top:4px; width:32px; height:32px; border-radius:50%; background:#fff; transition:.2s; }
+.tog.on .tog-k { left:44px; } .tog.off .tog-k { left:4px; }
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+
+/* Sub-nav (only inside calib screens that show it) */
+.sub-nav { position:absolute; bottom:0; left:0; right:0; height:var(--nav-h); background:var(--nav); border-top:1px solid var(--border); display:flex; }
+.stab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; cursor:pointer; color:var(--dim); font-size:var(--f-tiny); font-weight:700; transition:.15s; }
+.stab .si { font-size:30px; }
+.stab.on { color:var(--acc); border-top:3px solid var(--acc); background:#1A1A1A; }
+
+/* Back header */
+.back-hdr { position:absolute; top:0; left:0; right:0; height:var(--hdr); background:var(--bg); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; }
+.back-btn { background:transparent; border:none; color:var(--pri); font-family:'Hubot Sans','Alumni Sans',sans-serif; font-size:var(--f-md); font-weight:700; cursor:pointer; display:flex; align-items:center; gap:8px; }
+.page-cen { position:absolute; left:50%; transform:translateX(-50%); font-size:var(--f-md); font-weight:800; color:var(--acc); letter-spacing:2px; }
+</style>
+</head>
+<body>
+<div class="device">
+<!-- Brightness overlay — sits above all screens -->
+<div id="bright-overlay" style="position:absolute;inset:0;background:#000;pointer-events:none;opacity:.1;z-index:90;transition:opacity .3s;border-radius:10px;"></div>
+
+<!-- ══ CÂN ══ -->
+<div class="screen active" id="scr-0">
+  <div class="hdr">
+    <div class="hdr-time"><span id="t0" class="f-md bold c-acc">--:--:--</span><span id="d0" class="f-tiny c-sec">--/--/----</span></div>
+    <span class="hdr-tit" data-i18n="app_name">CÂN MÁY XÚC</span>
+    <div class="hdr-ico">⟳ <span class="semi">4G</span> 📶 🔋85%</div>
+  </div>
+
+  <!-- Order card — compact -->
+  <div style="position:absolute;top:108px;left:24px;right:24px;">
+    <div class="card" style="position:relative;padding:20px 24px;cursor:pointer;" onclick="showPending()"
+         onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <span id="s0-ord-id" class="f-tiny c-sec semi" style="letter-spacing:1px;">ĐƠN #ORD-8924</span>
+          <div id="s0-ord-co" class="f-lg bold c-pri">Acme Construction Ltd.</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
+            <span class="f-sm c-sec">🚛</span>
+            <span id="s0-ord-mat" class="f-sm c-sec">Đá dăm loại 1</span>
+          </div>
+        </div>
+        <div style="border:1px solid #555;border-radius:10px;padding:12px 20px;display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;margin-left:16px;">
+          <span id="s0-ord-st" class="f-sm bold c-pri">CHỜ XỬ LÝ</span>
+          <span class="f-tiny c-sec">▼</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Weight display -->
+  <div style="position:absolute;top:284px;left:24px;right:24px;">
+    <div class="card" style="background:#161616;height:490px;position:relative;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span class="f-lg bold c-pri" data-i18n="bucket_current">GÀU HIỆN TẠI:</span>
+        <span class="f-sm c-sec">KG</span>
+      </div>
+      <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-62%);text-align:center;">
+        <span id="s0-w" style="font-size:210px;font-weight:900;color:var(--acc);line-height:1;">0</span>
+      </div>
+      <div style="position:absolute;bottom:24px;left:24px;right:24px;">
+        <div class="prog"><div class="prog-fill" id="s0-bar" style="width:0%"></div><div class="prog-lbl" id="s0-pct">HOÀN THÀNH 0%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div style="position:absolute;top:790px;left:24px;right:24px;display:flex;gap:16px;">
+    <div class="card" style="flex:1;height:192px;position:relative;">
+      <div class="f-sm c-sec semi" data-i18n="total_loaded">Tổng đã tải</div>
+      <div id="s0-tot" class="f-lg bold c-pri" style="margin-top:12px;">0</div>
+      <div class="f-sm c-sec" style="position:absolute;bottom:20px;">kg</div>
+      <div id="s0-totpct" class="f-xs c-dim" style="position:absolute;bottom:4px;">0% của mục tiêu</div>
+    </div>
+    <div class="card" style="flex:1;height:192px;position:relative;cursor:pointer;transition:.15s;"
+         onclick="showNumpad(false)" onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div class="f-sm c-sec semi" style="text-align:right;" data-i18n="target_label">MỤC TIÊU ✎</div>
+      <div id="s0-tgt" class="f-lg bold c-acc" style="text-align:right;margin-top:12px;">25,000</div>
+      <div class="f-sm c-sec" style="position:absolute;bottom:20px;right:20px;">kg</div>
+      <div class="f-xs c-dim" style="position:absolute;bottom:4px;right:20px;" data-i18n="tap_to_edit">Nhấn để chỉnh</div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div style="position:absolute;bottom:148px;left:24px;right:24px;">
+    <button class="btn-pri" id="s0-btn" onclick="s0Click()">▶  BẮT ĐẦU CÂN</button>
+  </div>
+
+  <div class="nav-bar" id="nb0"></div>
+
+  <!-- NUMPAD MODAL -->
+  <div class="overlay" id="np-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-title"><span>NHẬP MỤC TIÊU CÂN</span><div class="xbtn" onclick="closeNP()">✕</div></div>
+      <div class="np-disp">
+        <div class="f-tiny c-sec semi" style="letter-spacing:2px;">TRỌNG LƯỢNG MỤC TIÊU</div>
+        <div id="np-val" class="f-lg bold c-acc" style="margin:8px 0;">0</div>
+        <div class="f-tiny c-sec">KG</div>
+      </div>
+      <div class="np-grid">
+        <button class="np-btn" onclick="npK('1')">1</button><button class="np-btn" onclick="npK('2')">2</button><button class="np-btn" onclick="npK('3')">3</button>
+        <button class="np-btn" onclick="npK('4')">4</button><button class="np-btn" onclick="npK('5')">5</button><button class="np-btn" onclick="npK('6')">6</button>
+        <button class="np-btn" onclick="npK('7')">7</button><button class="np-btn" onclick="npK('8')">8</button><button class="np-btn" onclick="npK('9')">9</button>
+        <button class="np-btn" onclick="npK('.')">.</button><button class="np-btn" onclick="npK('0')">0</button><button class="np-btn del" onclick="npDel()">⌫</button>
+      </div>
+      <div class="btn-row"><button class="btn-cancel" onclick="closeNP()">HỦY</button><button class="btn-ok" id="np-ok-btn" onclick="npOK()">BẮT ĐẦU</button></div>
+    </div>
+  </div>
+
+  <!-- PENDING MODAL -->
+  <div class="overlay" id="pend-modal" style="display:none;">
+    <div class="modal" style="max-height:900px;overflow-y:auto;">
+      <div class="modal-title"><span>CHỌN ĐƠN HÀNG</span><div class="xbtn" onclick="closePend()">✕</div></div>
+      <div id="pend-list" style="display:flex;flex-direction:column;gap:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ĐƠN HÀNG ══ -->
+<div class="screen" id="scr-1">
+  <div class="hdr"><div class="hdr-time"><span id="t1" class="f-md bold c-acc">--:--:--</span><span id="d1" class="f-tiny c-sec">--/--/----</span></div><span class="hdr-tit" data-i18n="app_name">CÂN MÁY XÚC</span><div class="hdr-ico">⟳ <span class="semi">4G</span> 📶 🔋85%</div></div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;display:flex;align-items:center;justify-content:space-between;">
+    <div><div class="f-lg bold c-pri" data-i18n="orders_title">ĐƠN HÀNG</div><div class="f-sm c-sec" style="margin-top:4px;" data-i18n="orders_sub">Quản lý và theo dõi đơn hàng</div></div>
+    <button id="dl-btn" onclick="dlClick()" style="background:var(--acc);border:none;border-radius:var(--r-sm);padding:18px 28px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-sm);font-weight:800;color:#1A1A1A;cursor:pointer;" data-i18n="orders_load">⬇ TẢI ĐƠN MỚI</button>
+  </div>
+  <div style="position:absolute;top:228px;left:24px;right:24px;display:flex;gap:12px;overflow-x:auto;">
+    <button class="pill on" id="f0" onclick="setF(0)" data-i18n="filter_all">TẤT CẢ</button>
+    <button class="pill" id="f1" onclick="setF(1)" data-i18n="filter_active">ĐANG THỰC HIỆN</button>
+    <button class="pill" id="f2" onclick="setF(2)" data-i18n="filter_done">ĐÃ HOÀN THÀNH</button>
+    <button class="pill" id="f3" onclick="setF(3)" data-i18n="filter_today">HÔM NAY</button>
+  </div>
+  <div id="ord-grid" style="position:absolute;top:308px;left:24px;right:24px;bottom:148px;display:grid;grid-template-columns:1fr 1fr;gap:16px;overflow-y:auto;padding-bottom:8px;"></div>
+  <div class="nav-bar" id="nb1"></div>
+</div>
+
+<!-- ══ LỊCH SỬ ══ -->
+<div class="screen" id="scr-2">
+  <div class="hdr"><div class="hdr-time"><span id="t2" class="f-md bold c-acc">--:--:--</span><span id="d2" class="f-tiny c-sec">--/--/----</span></div><span class="hdr-tit" data-i18n="app_name">CÂN MÁY XÚC</span><div class="hdr-ico">⟳ <span class="semi">4G</span> 📶 🔋85%</div></div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;">
+    <div class="f-xl bold c-pri" style="line-height:1;" data-i18n="hist_title">LỊCH SỬ CÂN</div>
+    <div class="f-sm c-sec" style="margin-top:6px;" data-i18n="hist_sub">Chi tiết các lần cân gần đây</div>
+  </div>
+  <div style="position:absolute;top:252px;left:24px;right:24px;display:flex;gap:12px;">
+    <select style="flex:1;background:#242424;border:1px solid #333;border-radius:var(--r-sm);color:var(--pri);font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-sm);padding:14px;"><option>Tất cả ngày</option></select>
+    <select style="flex:1;background:#242424;border:1px solid #333;border-radius:var(--r-sm);color:var(--pri);font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-sm);padding:14px;"><option>Tất cả vật liệu</option></select>
+    <button style="background:var(--acc);border:none;border-radius:var(--r-sm);padding:14px 24px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-sm);font-weight:800;color:#1A1A1A;cursor:pointer;" data-i18n="hist_filter">LỌC</button>
+  </div>
+  <div id="hist-list" style="position:absolute;top:340px;left:24px;right:24px;bottom:148px;overflow-y:auto;"></div>
+  <div class="nav-bar" id="nb2"></div>
+</div>
+
+<!-- ══ BÁO CÁO ══ -->
+<div class="screen" id="scr-3">
+  <div class="hdr"><div class="hdr-time"><span id="t3" class="f-md bold c-acc">--:--:--</span><span id="d3" class="f-tiny c-sec">--/--/----</span></div><span class="hdr-tit" data-i18n="app_name">CÂN MÁY XÚC</span><div class="hdr-ico">⟳ <span class="semi">4G</span> 📶 🔋85%</div></div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;display:flex;justify-content:space-between;align-items:center;height:72px;">
+    <div><div class="f-lg bold c-pri" data-i18n="rpt_title">Báo cáo &amp; Thống kê</div><div class="f-sm c-sec" data-i18n="rpt_sub">Tổng quan hiệu suất hôm nay</div></div>
+    <span id="s3-time" class="f-lg bold c-acc">--:-- --</span>
+  </div>
+  <div style="position:absolute;top:194px;left:24px;right:24px;display:flex;gap:12px;">
+    <div class="card" style="flex:1;text-align:center;padding:18px 8px;"><div style="font-size:36px;">⬇</div><div class="f-tiny c-sec semi" style="margin-top:4px;line-height:1.3;">TỔNG KHỐI<br>LƯỢNG</div><div class="f-lg bold c-acc" style="margin-top:8px;">245,000</div><div class="f-tiny c-sec">KG</div></div>
+    <div class="card" style="flex:1;text-align:center;padding:18px 8px;"><div style="font-size:36px;">🚛</div><div class="f-tiny c-sec semi" style="margin-top:4px;line-height:1.3;">CHUYẾN HOÀN<br>THÀNH</div><div class="f-lg bold" style="color:#64B5F6;margin-top:8px;">12</div></div>
+    <div class="card" style="flex:1;text-align:center;padding:18px 8px;"><div style="font-size:36px;">⚡</div><div class="f-tiny c-sec semi" style="margin-top:4px;line-height:1.3;">HIỆU<br>SUẤT</div><div class="f-lg bold" style="color:#66BB6A;margin-top:8px;">94</div><div class="f-tiny c-sec">%</div></div>
+  </div>
+  <!-- Chart full width -->
+  <div style="position:absolute;top:390px;left:24px;right:24px;">
+    <div class="card" style="height:468px;display:flex;flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="f-tiny c-sec semi" style="letter-spacing:1px;">PHÂN BỐ TẢI TRỌNG THEO GIỜ</div>
+        <div style="display:flex;gap:14px;"><span style="color:var(--acc);font-size:20px;">■ Đá dăm</span><span style="color:#90CAF9;font-size:20px;">■ Cát</span></div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+        <div style="flex:1;display:flex;align-items:flex-end;gap:10px;padding:0 4px;">
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%;"><div style="background:var(--acc);height:28%;border-radius:4px 4px 0 0;"></div><div style="background:#90CAF9;height:12%;border-radius:4px 4px 0 0;"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%;"><div style="background:var(--acc);height:45%;border-radius:4px 4px 0 0;"></div><div style="background:#90CAF9;height:24%;border-radius:4px 4px 0 0;"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%;"><div style="background:var(--acc);height:62%;border-radius:4px 4px 0 0;"></div><div style="background:#90CAF9;height:38%;border-radius:4px 4px 0 0;"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%;"><div style="background:var(--acc);height:50%;border-radius:4px 4px 0 0;"></div><div style="background:#90CAF9;height:30%;border-radius:4px 4px 0 0;"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%;"><div style="background:var(--acc);height:84%;border-radius:4px 4px 0 0;"></div><div style="background:#90CAF9;height:56%;border-radius:4px 4px 0 0;"></div></div>
+          <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:3px;height:100%;"><div style="background:var(--acc);height:72%;border-radius:4px 4px 0 0;"></div><div style="background:#90CAF9;height:50%;border-radius:4px 4px 0 0;"></div></div>
+        </div>
+        <div style="display:flex;gap:10px;padding:8px 4px 0;">
+          <div style="flex:1;text-align:center;" class="f-tiny c-sec">06:00</div>
+          <div style="flex:1;text-align:center;" class="f-tiny c-sec">07:00</div>
+          <div style="flex:1;text-align:center;" class="f-tiny c-sec">08:00</div>
+          <div style="flex:1;text-align:center;" class="f-tiny c-sec">09:00</div>
+          <div style="flex:1;text-align:center;" class="f-tiny c-sec">10:00</div>
+          <div style="flex:1;text-align:center;" class="f-tiny c-sec">11:00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Location + Export -->
+  <div style="position:absolute;top:874px;left:24px;right:24px;display:flex;gap:12px;align-items:stretch;">
+    <div class="card" style="flex:2;background:#1C1C1C;display:flex;align-items:center;gap:12px;padding:20px;">
+      <span style="font-size:36px;">📍</span>
+      <div><div class="f-tiny c-sec semi">VỊ TRÍ HIỆN TẠI</div><div class="f-sm c-pri" style="margin-top:4px;line-height:1.4;">JR4J+FJC, Bát Xát,<br>Lào Cai, Việt Nam</div></div>
+    </div>
+    <button onclick="showUSB()" style="flex:1;background:var(--acc);border:none;border-radius:var(--r-sm);padding:20px 16px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-sm);font-weight:800;color:#1A1A1A;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;"><span style="font-size:40px;">🔌</span>Xuất báo cáo</button>
+  </div>
+  <div class="nav-bar" id="nb3"></div>
+  <!-- USB MODAL -->
+  <div class="overlay" id="usb-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-title"><span>🔌 CHỌN THIẾT BỊ USB</span><div class="xbtn" onclick="closeUSB()">✕</div></div>
+      <div class="f-sm c-sec" style="margin-bottom:16px;">Dữ liệu báo cáo sẽ được lưu vào USB đã chọn</div>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+        <div class="usb-row" onclick="usbSave(1)"><span style="font-size:48px;color:var(--acc);">🔌</span><div style="flex:1;"><div class="f-md bold c-pri">USB 1</div><div class="f-sm" style="color:#22C55E;">32 GB — Sẵn sàng</div></div><span class="f-md c-sec">›</span></div>
+        <div class="usb-row" onclick="usbSave(2)"><span style="font-size:48px;color:var(--acc);">🔌</span><div style="flex:1;"><div class="f-md bold c-pri">USB 2</div><div class="f-sm" style="color:#22C55E;">16 GB — Sẵn sàng</div></div><span class="f-md c-sec">›</span></div>
+        <div class="usb-row off"><span style="font-size:48px;color:var(--dim);">🔌</span><div style="flex:1;"><div class="f-md bold c-dim">USB 3</div><div class="f-sm c-dim">Chưa kết nối</div></div></div>
+      </div>
+      <button class="btn-cancel" style="width:100%;padding:22px;border-radius:var(--r-sm);border:none;cursor:pointer;" onclick="closeUSB()">HỦY</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CÀI ĐẶT ══ -->
+<div class="screen" id="scr-4">
+  <div class="hdr"><div class="hdr-time"><span id="t4" class="f-md bold c-acc">--:--:--</span><span id="d4" class="f-tiny c-sec">--/--/----</span></div><span class="hdr-tit" data-i18n="app_name">CÂN MÁY XÚC</span><div class="hdr-ico">⟳ <span class="semi">4G</span> 📶 🔋85%</div></div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;bottom:148px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-bottom:8px;" id="set-list"></div>
+  <!-- PIN modal -->
+  <div class="overlay" id="pin-modal" style="display:none;">
+    <div class="modal" style="width:560px;">
+      <div class="modal-title"><span>🔑 NHẬP MÃ PIN</span><div class="xbtn" onclick="closePIN()">✕</div></div>
+      <div class="f-sm c-sec">Xác thực để vào Hiệu chuẩn</div>
+      <div class="pin-dots"><div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div><div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div></div>
+      <div class="pin-err" id="pin-err"></div>
+      <div class="np-grid">
+        <button class="np-btn" onclick="pinK('1')">1</button><button class="np-btn" onclick="pinK('2')">2</button><button class="np-btn" onclick="pinK('3')">3</button>
+        <button class="np-btn" onclick="pinK('4')">4</button><button class="np-btn" onclick="pinK('5')">5</button><button class="np-btn" onclick="pinK('6')">6</button>
+        <button class="np-btn" onclick="pinK('7')">7</button><button class="np-btn" onclick="pinK('8')">8</button><button class="np-btn" onclick="pinK('9')">9</button>
+        <button class="np-btn">.</button><button class="np-btn" onclick="pinK('0')">0</button><button class="np-btn del" onclick="pinDel()">⌫</button>
+      </div>
+      <div class="btn-row"><button class="btn-cancel" onclick="closePIN()">HỦY</button><button class="btn-ok" onclick="pinOK()">✓ XÁC NHẬN</button></div>
+    </div>
+  </div>
+  <!-- CHANGE PIN modal -->
+  <div class="overlay" id="chpin-modal" style="display:none;">
+    <div class="modal" style="width:600px;">
+      <div class="modal-title">
+        <div><div id="cp-tit" class="f-md bold c-pri">🔑 ĐỔI MÃ PIN</div><div id="cp-sub" class="f-tiny c-sec" style="margin-top:4px;"></div></div>
+        <div class="xbtn" onclick="closeCHP()">✕</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <div id="cps1" style="flex:1;height:4px;border-radius:2px;background:var(--acc);"></div>
+        <div id="cps2" style="flex:1;height:4px;border-radius:2px;background:#333;"></div>
+        <div id="cps3" style="flex:1;height:4px;border-radius:2px;background:#333;"></div>
+      </div>
+      <div class="pin-dots"><div class="pin-dot" id="cp0"></div><div class="pin-dot" id="cp1"></div><div class="pin-dot" id="cp2"></div><div class="pin-dot" id="cp3"></div></div>
+      <div class="pin-err" id="cp-err"></div>
+      <div id="cp-numpad">
+        <div class="np-grid">
+          <button class="np-btn" onclick="cpK('1')">1</button><button class="np-btn" onclick="cpK('2')">2</button><button class="np-btn" onclick="cpK('3')">3</button>
+          <button class="np-btn" onclick="cpK('4')">4</button><button class="np-btn" onclick="cpK('5')">5</button><button class="np-btn" onclick="cpK('6')">6</button>
+          <button class="np-btn" onclick="cpK('7')">7</button><button class="np-btn" onclick="cpK('8')">8</button><button class="np-btn" onclick="cpK('9')">9</button>
+          <button class="np-btn">.</button><button class="np-btn" onclick="cpK('0')">0</button><button class="np-btn del" onclick="cpDel()">⌫</button>
+        </div>
+        <div class="btn-row"><button class="btn-cancel" onclick="closeCHP()">HỦY</button><button class="btn-ok" id="cp-next" onclick="cpNext()">TIẾP THEO →</button></div>
+      </div>
+      <div id="cp-ok" style="display:none;text-align:center;padding:24px 0;">
+        <div style="font-size:80px;">✅</div>
+        <div class="f-lg bold" style="color:#22C55E;margin-top:8px;">ĐỔI MÃ THÀNH CÔNG</div>
+        <div class="f-sm c-sec" style="margin-top:8px;">Mã PIN mới đã được cập nhật</div>
+      </div>
+    </div>
+  </div>
+  <div class="nav-bar" id="nb4"></div>
+</div>
+
+<!-- ══ CẤU HÌNH (no sub-nav) ══ -->
+<div class="screen" id="scr-cfg">
+  <div class="back-hdr">
+    <button class="back-btn" onclick="navTo(4)" data-i18n="back_btn">‹ Quay lại</button>
+    <span class="page-cen" data-i18n="cfg_title">THIẾT LẬP THIẾT BỊ</span>
+  </div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;bottom:12px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding-bottom:16px;">
+
+    <!-- ① Màn hình -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <span class="f-md bold c-pri" data-i18n="screen_lbl">Màn hình</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span class="f-sm c-sec" data-i18n="brightness_lbl">Độ sáng</span>
+        <div style="display:flex;align-items:baseline;gap:4px;"><span class="f-lg bold c-acc" id="lbl-bright">80</span><span class="f-sm c-sec">%</span></div>
+      </div>
+      <input type="range" id="sl-bright" min="10" max="100" value="80" oninput="setBright(this.value)">
+      <div style="display:flex;justify-content:space-between;margin-top:4px;">
+        <span class="f-tiny c-dim" data-i18n="dark_lbl">Tối</span><span class="f-tiny c-dim" data-i18n="bright_lbl">Sáng</span>
+      </div>
+    </div>
+
+    <!-- ② Âm thanh -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span class="f-md bold c-pri" data-i18n="audio_lbl">Âm thanh</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span class="f-sm c-sec" data-i18n="volume_lbl">Âm lượng</span>
+        <div style="display:flex;align-items:baseline;gap:4px;"><span class="f-lg bold c-acc" id="lbl-vol">70</span><span class="f-sm c-sec">%</span></div>
+      </div>
+      <input type="range" id="sl-vol" min="0" max="100" value="70" oninput="document.getElementById('lbl-vol').textContent=this.value">
+      <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><div class="f-sm bold c-pri" data-i18n="overload_warn">Cảnh báo quá tải</div><div class="f-tiny c-sec" style="margin-top:2px;" data-i18n="overload_sub">Phát âm thanh khi vượt ngưỡng</div></div>
+        <div class="tog on" id="tog-alarm" onclick="togClick('tog-alarm')"><div class="tog-k"></div></div>
+      </div>
+    </div>
+
+    <!-- ③ Giới hạn tải trọng -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="f-md bold c-pri" data-i18n="load_lbl">Giới hạn tải trọng</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span class="f-sm c-sec" data-i18n="max_weight">Tải trọng tối đa</span>
+        <div style="display:flex;align-items:baseline;gap:4px;"><span class="f-lg bold" style="color:#EF4444;" id="lbl-maxw">12,000</span><span class="f-sm c-sec">KG</span></div>
+      </div>
+      <input type="range" id="sl-maxw" min="5000" max="30000" step="500" value="12000" oninput="updateMaxW(this.value)">
+      <div style="height:1px;background:var(--border);margin:12px 0;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span class="f-sm c-sec" data-i18n="threshold">Ngưỡng cảnh báo còi</span>
+        <span class="f-lg bold c-acc" id="lbl-thresh">90%</span>
+      </div>
+      <input type="range" id="sl-thresh" min="50" max="100" value="90" oninput="updateThresh(this.value)">
+      <div id="warn-box" style="background:#1A1A1A;border:1px solid #EF4444;border-radius:var(--r-sm);padding:10px 16px;margin-top:8px;">
+        <span id="warn-lbl" class="f-tiny" style="color:#EF4444;">Còi báo khi tải &gt; 10,800 KG (90% của 12,000 KG)</span>
+      </div>
+    </div>
+
+    <!-- ④ Ngôn ngữ -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span class="f-md bold c-pri" data-i18n="lang_lbl">Ngôn ngữ</span>
+      </div>
+      <div style="display:flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;height:72px;">
+        <button id="lang-vi" onclick="setLang('vi')" style="flex:1;background:var(--acc);border:none;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-md);font-weight:800;color:#1A1A1A;cursor:pointer;">Tiếng Việt</button>
+        <button id="lang-en" onclick="setLang('en')" style="flex:1;background:#2A2A2A;border:none;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-md);font-weight:700;color:var(--sec);cursor:pointer;">English</button>
+      </div>
+    </div>
+
+    <!-- ⑤ Thời gian & Ngày tháng -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="f-md bold c-pri" data-i18n="time_lbl">Thời gian &amp; Ngày tháng</span>
+      </div>
+      <!-- Live clock display -->
+      <div style="background:#111;border-radius:var(--r-sm);padding:20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="f-tiny c-sec semi" style="letter-spacing:1px;">THỜI GIAN HIỆN TẠI</div>
+          <div id="cfg-time" class="f-lg bold c-acc" style="margin-top:6px;font-size:56px;line-height:1;">--:--:--</div>
+          <div id="cfg-date" class="f-sm c-sec" style="margin-top:4px;">--/--/----</div>
+        </div>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+
+      <!-- Time input -->
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span class="f-tiny c-sec semi" style="letter-spacing:1px;">CÀI GIỜ &amp; PHÚT</span>
+        </div>
+        <input type="time" id="inp-time" style="width:100%;background:#1A1A1A;border:1px solid var(--border);border-radius:var(--r-sm);padding:18px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-md);color:var(--pri);outline:none;cursor:pointer;color-scheme:dark;">
+      </div>
+
+      <!-- Date input -->
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="f-tiny c-sec semi" style="letter-spacing:1px;">CÀI NGÀY / THÁNG / NĂM</span>
+        </div>
+        <input type="date" id="inp-date" style="width:100%;background:#1A1A1A;border:1px solid var(--border);border-radius:var(--r-sm);padding:18px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-md);color:var(--pri);outline:none;cursor:pointer;color-scheme:dark;">
+      </div>
+
+      <!-- Timezone -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span class="f-tiny c-sec semi" style="letter-spacing:1px;">MÚI GIỜ</span>
+        </div>
+        <select id="sel-tz" style="width:100%;background:#1A1A1A;border:1px solid var(--border);border-radius:var(--r-sm);padding:18px 16px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-sm);color:var(--pri);outline:none;cursor:pointer;color-scheme:dark;appearance:none;-webkit-appearance:none;background-image:url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23888\' stroke-width=\'2\'><polyline points=\'6 9 12 15 18 9\'></polyline></svg>');background-repeat:no-repeat;background-position:right 16px center;">
+          <option value="UTC+7" selected>UTC+7 — Hà Nội / TP. Hồ Chí Minh</option>
+          <option value="UTC+7B">UTC+7 — Bangkok / Jakarta</option>
+          <option value="UTC+8">UTC+8 — Bắc Kinh / Singapore / Kuala Lumpur</option>
+          <option value="UTC+9">UTC+9 — Tokyo / Seoul</option>
+          <option value="UTC+5.5">UTC+5:30 — Mumbai / New Delhi</option>
+          <option value="UTC+3">UTC+3 — Moscow / Kuwait</option>
+          <option value="UTC+1">UTC+1 — Paris / Berlin / Rome</option>
+          <option value="UTC+0">UTC+0 — London (GMT)</option>
+          <option value="UTC-5">UTC−5 — New York / Toronto</option>
+          <option value="UTC-8">UTC−8 — Los Angeles / Vancouver</option>
+        </select>
+      </div>
+
+      <!-- NTP toggle -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;background:#1A1A1A;border-radius:var(--r-sm);padding:14px 16px;">
+        <div><div class="f-sm bold c-pri" data-i18n="ntp_label">Đồng bộ NTP tự động</div><div class="f-tiny c-sec" style="margin-top:2px;" data-i18n="ntp_sub">Tự động cập nhật giờ qua mạng</div></div>
+        <div class="tog on" id="tog-ntp" onclick="togClick('tog-ntp')"><div class="tog-k"></div></div>
+      </div>
+
+      <!-- Save button -->
+      <button class="btn-pri" onclick="saveTime()" style="display:flex;align-items:center;justify-content:center;gap:12px;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.2" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        LƯU CÀI ĐẶT THỜI GIAN
+      </button>
+      <div id="time-saved" style="display:none;text-align:center;margin-top:12px;background:#14532d;border:1px solid #22C55E;border-radius:var(--r-sm);padding:14px;" class="f-sm semi" style="color:#22C55E;">
+        <span style="color:#22C55E;">✅ Đã lưu — Thời gian sẽ được áp dụng sau khi khởi động lại</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MẠNG (no sub-nav) ══ -->
+<div class="screen" id="scr-net">
+  <div class="back-hdr">
+    <button class="back-btn" onclick="navTo(4)" data-i18n="back_btn">‹ Quay lại</button>
+    <span class="page-cen" data-i18n="net_title">CÀI ĐẶT MẠNG</span>
+  </div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;bottom:12px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding-bottom:16px;">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+          <div class="f-md bold c-pri">Kết nối Wi-Fi</div>
+        </div>
+        <div class="tog on" id="tog-wifi" onclick="togClick('tog-wifi')"><div class="tog-k"></div></div>
+      </div>
+      <!-- Connected network -->
+      <div style="background:#0D1F0D;border:1px solid #22C55E;border-radius:var(--r-sm);padding:16px 20px;margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="1.8" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        <div style="flex:1;">
+          <div class="f-sm bold c-pri">SITE_MESH_ALPHA</div>
+          <div class="f-tiny" style="color:#22C55E;">✓ Đã kết nối • 5GHz • Bảo mật WPA2</div>
+        </div>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <!-- Scan header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div class="f-tiny c-sec semi" style="letter-spacing:1px;">MẠNG WI-FI CÓ SẴN</div>
+        <button id="scan-btn" onclick="scanWifi()" style="background:#2A2A2A;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 16px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-tiny);font-weight:700;color:var(--acc);cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+          QUÉT LẠI
+        </button>
+      </div>
+      <!-- Network list -->
+      <div id="wifi-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    <!-- WiFi password modal -->
+    <div class="overlay" id="wifi-modal" style="display:none;z-index:200;">
+      <div class="modal" style="width:680px;">
+        <div class="modal-title">
+          <div>
+            <div class="f-md bold c-pri" id="wifi-ssid-title">Kết nối Wi-Fi</div>
+            <div class="f-tiny c-sec" style="margin-top:4px;" id="wifi-ssid-sub">Nhập mật khẩu để kết nối</div>
+          </div>
+          <div class="xbtn" onclick="closeWifi()">✕</div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div class="f-tiny c-sec semi" style="margin-bottom:8px;letter-spacing:1px;">MẬT KHẨU WI-FI</div>
+          <div style="position:relative;">
+            <input type="password" id="wifi-pw" placeholder="Nhập mật khẩu..." style="width:100%;background:#1A1A1A;border:1px solid var(--border);border-radius:var(--r-sm);padding:18px 60px 18px 18px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-md);color:var(--pri);outline:none;color-scheme:dark;" onfocus="this.style.borderColor='var(--acc)'" onblur="this.style.borderColor='var(--border)'">
+            <button onclick="togglePW()" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--sec);">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style="background:#1A1A1A;border-radius:var(--r-sm);padding:14px 18px;margin-bottom:16px;display:flex;gap:20px;">
+          <div><div class="f-tiny c-sec semi" style="margin-bottom:2px;">BẢO MẬT</div><div class="f-sm bold c-pri" id="wifi-sec-type">WPA2</div></div>
+          <div style="width:1px;background:var(--border);"></div>
+          <div><div class="f-tiny c-sec semi" style="margin-bottom:2px;">TẦN SỐ</div><div class="f-sm bold c-pri" id="wifi-freq">2.4GHz</div></div>
+          <div style="width:1px;background:var(--border);"></div>
+          <div><div class="f-tiny c-sec semi" style="margin-bottom:2px;">CƯỜNG ĐỘ</div><div class="f-sm bold" id="wifi-sig" style="color:#22C55E;">Mạnh</div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-cancel" onclick="closeWifi()">HỦY</button>
+          <button class="btn-ok" onclick="connectWifi()">KẾT NỐI</button>
+        </div>
+        <div id="wifi-connecting" style="display:none;text-align:center;margin-top:12px;" class="f-sm c-sec">⟳ Đang kết nối...</div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div class="f-md bold c-pri">Dữ liệu di động</div>
+        <div class="tog on" id="tog-4g" onclick="togClick('tog-4g')"><div class="tog-k"></div></div>
+      </div>
+      <div style="background:#1A1A1A;border:1px solid var(--acc);border-radius:var(--r-sm);padding:16px 20px;display:flex;align-items:center;gap:12px;">
+        <span style="font-size:28px;">📶</span>
+        <div style="flex:1;"><div class="f-sm bold c-pri">Viettel 4G</div><div class="f-tiny c-acc semi">ĐANG KẾT NỐI</div></div>
+        <div style="background:#2A2A2A;border:1px solid var(--border);border-radius:6px;padding:8px 16px;"><span class="f-sm bold c-pri">LTE</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div class="f-md bold c-pri">Đồng bộ đám mây</div>
+        <button onclick="forcSync()" style="background:#2A2A2A;border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 20px;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-tiny);font-weight:700;color:var(--pri);cursor:pointer;" id="sync-btn">⟳ BUỘC ĐỒNG BỘ</button>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div style="flex:1;background:#1A1A1A;border-radius:var(--r-sm);padding:16px;">
+          <div class="f-tiny c-sec semi" style="margin-bottom:8px;">ĐIỂM CUỐI REST API</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><div style="width:10px;height:10px;border-radius:50%;background:#22C55E;"></div><span class="f-sm" style="color:#22C55E;">Đang hoạt động</span></div>
+          <div style="background:#111;border-radius:6px;padding:8px 12px;margin-bottom:8px;"><span class="f-sm c-sec">api.telematic.cloud</span></div>
+          <div style="display:flex;justify-content:space-between;"><span class="f-tiny c-sec">Giao thức</span><span class="f-tiny bold c-pri">HTTPS / TLS 1.3</span></div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;"><span class="f-tiny c-sec">Cổng</span><span class="f-tiny bold c-pri">443</span></div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;"><span class="f-tiny c-sec">Độ trễ</span><span class="f-tiny bold" style="color:#22C55E;">42 ms</span></div>
+        </div>
+        <div style="flex:1;background:#1A1A1A;border-radius:var(--r-sm);padding:16px;">
+          <div class="f-tiny c-sec semi" style="margin-bottom:8px;">ĐỒNG BỘ LẦN CUỐI</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span style="color:#22C55E;">✅</span><span class="f-sm" style="color:#22C55E;">Thành công</span></div>
+          <div class="f-tiny c-sec" style="margin-bottom:12px;">⏱ 2 phút trước</div>
+          <div style="display:flex;justify-content:space-between;"><span class="f-tiny c-sec">Bản ghi đã gửi</span><span class="f-tiny bold c-pri">124</span></div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;"><span class="f-tiny c-sec">Dữ liệu</span><span class="f-tiny bold c-pri">48 KB</span></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="f-tiny c-sec semi">DUNG LƯỢNG BỘ ĐỆM CỤC BỘ</span><span class="f-tiny bold c-pri">12%</span></div>
+        <div class="prog" style="height:12px;"><div class="prog-fill" style="width:12%;border-radius:6px;background:#3B82F6;"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ HIỆU CHUẨN ══ -->
+<div class="screen" id="scr-calib">
+  <div class="back-hdr">
+    <button class="back-btn" onclick="navTo(4)" data-i18n="back_btn">‹ Quay lại</button>
+  </div>
+
+  <div style="position:absolute;top:96px;left:0;right:0;bottom:0;overflow-y:auto;">
+    <div style="padding:24px 24px 130px 24px;display:flex;flex-direction:column;gap:0;">
+
+      <!-- Title -->
+      <div style="margin-bottom:16px;">
+        <div style="font-size:96px;font-weight:900;color:#fff;line-height:.92;letter-spacing:-2px;" data-i18n="calib_title">HIỆU CHUẨN</div>
+        <div class="f-sm c-sec" style="margin-top:10px;" data-i18n="calib_sub">Căn chỉnh hệ thống &amp; Tinh chỉnh cảm biến</div>
+        <div style="height:1px;background:var(--border);margin:16px 0 0;"></div>
+      </div>
+
+      <!-- Machine type tabs -->
+      <div style="margin-bottom:20px;">
+        <div class="f-tiny c-sec semi" style="letter-spacing:2px;margin-bottom:10px;" data-i18n="calib_type">LOẠI MÁY XÚC</div>
+        <div style="display:flex;border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;height:88px;">
+          <button id="tab-gau" onclick="setMTab(0)" style="flex:1;border:none;border-right:1px solid var(--border);font-family:'Hubot Sans','Alumni Sans',sans-serif;font-weight:900;cursor:pointer;background:var(--acc);color:#1A1A1A;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:.15s;">
+            <span style="font-size:32px;font-weight:900;letter-spacing:.5px;" data-i18n="calib_gau">XÚC GẦU</span>
+            <span style="font-size:20px;font-weight:700;opacity:.75;letter-spacing:1px;">6 AP + 4 GÓC</span>
+          </button>
+          <button id="tab-lat" onclick="setMTab(1)" style="flex:1;border:none;font-family:'Hubot Sans','Alumni Sans',sans-serif;font-weight:900;cursor:pointer;background:#2A2A2A;color:var(--sec);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:.15s;">
+            <span style="font-size:32px;font-weight:900;letter-spacing:.5px;" data-i18n="calib_lat">XÚC LẬT</span>
+            <span style="font-size:20px;font-weight:700;opacity:.75;letter-spacing:1px;">2 AP + 2 GÓC + 1 TC</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2-column layout -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+
+        <!-- LEFT: Tare + Angle cards -->
+        <div style="display:flex;flex-direction:column;gap:14px;">
+
+          <!-- Tare card -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:20px;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+              <div style="width:60px;height:60px;background:#211600;border:1px solid #8A6300;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="1.8" stroke-linecap="round"><path d="M12 3a4 4 0 0 1 4 4H8a4 4 0 0 1 4-4z"/><line x1="4" y1="7" x2="20" y2="7"/><rect x="6" y="7" width="12" height="3" rx="1"/><path d="M6 10v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-6"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+              </div>
+              <div style="flex:1;">
+                <div class="f-sm bold c-pri" style="letter-spacing:.5px;">ĐƯA CẢM BIẾN TẢI VỀ 0</div>
+                <div class="f-xs c-sec" style="margin-top:2px;">Trừ bì trọng lượng gàu rỗng</div>
+              </div>
+              <div style="background:#14532d;border:1px solid #166534;border-radius:30px;padding:6px 16px;"><span class="f-xs" style="color:#4ADE80;font-weight:700;">SẴN SÀNG</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;background:#1A1A1A;border-radius:var(--r-sm);padding:14px 16px;margin-bottom:14px;">
+              <div style="flex:1;"><div class="f-xs c-sec semi" style="letter-spacing:1px;margin-bottom:4px;">KẾT QUẢ HIỆN TẠI</div><div class="f-md bold c-pri">0.04 KG</div></div>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              <div style="flex:1;text-align:right;"><div class="f-xs c-sec semi" style="letter-spacing:1px;margin-bottom:4px;">MỤC TIÊU</div><div class="f-md bold c-acc">0.00 KG</div></div>
+            </div>
+            <div onclick="showCalibNP()" style="border:2px solid var(--acc);border-radius:var(--r-sm);padding:14px 16px;margin-bottom:14px;cursor:pointer;background:#1A1000;">
+              <div class="f-xs c-acc semi" style="letter-spacing:1px;margin-bottom:6px;">GIÁ TRỊ QUẢ CÂN CHUẨN (KG)</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span id="calib-val" style="font-size:40px;font-weight:800;color:var(--acc);">0.00</span>
+                <span class="f-sm c-sec">KG</span>
+              </div>
+            </div>
+            <button class="btn-pri" style="padding:20px;display:flex;align-items:center;justify-content:center;gap:10px;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              BẮT ĐẦU HIỆU CHUẨN
+            </button>
+          </div>
+
+          <!-- Angle card -->
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:20px;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+              <div style="width:60px;height:60px;background:#181818;border:1px solid #3A3A3A;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><line x1="2" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3"/></svg>
+              </div>
+              <div style="flex:1;">
+                <div class="f-sm bold c-pri" style="letter-spacing:.5px;">ĐỒNG BỘ MÁY ĐO ĐỘ NGHIÊNG</div>
+                <div class="f-xs c-sec" style="margin-top:2px;">Cân bằng máy trước khi bắt đầu</div>
+              </div>
+              <div style="background:#3A3A3A;border:1px solid #6B5100;border-radius:30px;padding:6px 16px;"><span class="f-xs" style="color:#EAB308;font-weight:700;">CHỜ XỬ LÝ</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+              <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:var(--r-sm);padding:14px;text-align:center;">
+                <div class="f-xs c-sec semi" style="letter-spacing:1px;margin-bottom:6px;">ĐỘ CHÚI</div>
+                <div style="font-size:36px;font-weight:800;color:#fff;">+2.4°</div>
+              </div>
+              <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:var(--r-sm);padding:14px;text-align:center;">
+                <div class="f-xs c-sec semi" style="letter-spacing:1px;margin-bottom:6px;">ĐỘ NGHIÊNG</div>
+                <div style="font-size:36px;font-weight:800;color:#fff;">-0.8°</div>
+              </div>
+            </div>
+            <button style="width:100%;padding:20px;background:transparent;border:1px solid var(--border);border-radius:var(--r-sm);color:var(--pri);font-family:'Hubot Sans','Alumni Sans',sans-serif;font-size:var(--f-md);font-weight:700;cursor:pointer;letter-spacing:1px;transition:.15s;" onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">HIỆU CHUẨN GÓC</button>
+          </div>
+        </div>
+
+        <!-- RIGHT: Sensor matrix -->
+        <div id="sensor-mx" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:20px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky save button -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 24px 20px;background:linear-gradient(transparent,#1A1A1A 35%);z-index:10;">
+    <button class="btn-pri" onclick="calibSave()" style="padding:24px;display:flex;align-items:center;justify-content:center;gap:14px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.2" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      LƯU KẾT QUẢ HIỆU CHUẨN
+    </button>
+  </div>
+
+  <!-- Calibration numpad modal -->
+  <div class="overlay" id="cnp-modal" style="display:none;">
+    <div class="modal">
+      <div class="modal-title"><span>NHẬP GIÁ TRỊ QUẢ CÂN CHUẨN</span><div class="xbtn" onclick="closeCalibNP()">✕</div></div>
+      <div class="np-disp">
+        <div class="f-tiny c-sec semi" style="letter-spacing:2px;">KHỐI LƯỢNG CHUẨN</div>
+        <div id="cnp-val" class="f-lg bold c-acc" style="margin:8px 0;">0.00</div>
+        <div class="f-tiny c-sec">KG</div>
+      </div>
+      <div class="np-grid">
+        <button class="np-btn" onclick="cnpK('1')">1</button><button class="np-btn" onclick="cnpK('2')">2</button><button class="np-btn" onclick="cnpK('3')">3</button>
+        <button class="np-btn" onclick="cnpK('4')">4</button><button class="np-btn" onclick="cnpK('5')">5</button><button class="np-btn" onclick="cnpK('6')">6</button>
+        <button class="np-btn" onclick="cnpK('7')">7</button><button class="np-btn" onclick="cnpK('8')">8</button><button class="np-btn" onclick="cnpK('9')">9</button>
+        <button class="np-btn" onclick="cnpK('.')">.</button><button class="np-btn" onclick="cnpK('0')">0</button><button class="np-btn del" onclick="cnpDel()">⌫</button>
+      </div>
+      <div class="btn-row"><button class="btn-cancel" onclick="closeCalibNP()">HỦY</button><button class="btn-ok" onclick="cnpOK()">✓ ÁP DỤNG</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ THÔNG TIN (no sub-nav) ══ -->
+<div class="screen" id="scr-info">
+  <div class="back-hdr">
+    <button class="back-btn" onclick="navTo(4)" data-i18n="back_btn">‹ Quay lại</button>
+    <span class="page-cen" data-i18n="info_title">THÔNG TIN</span>
+  </div>
+  <div style="position:absolute;top:108px;left:24px;right:24px;bottom:12px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding-bottom:16px;">
+    <div class="card" style="display:flex;flex-direction:column;align-items:center;padding:40px 24px;">
+      <div style="width:120px;height:120px;border:2px solid var(--acc);border-radius:var(--r-md);display:flex;align-items:center;justify-content:center;font-size:64px;margin-bottom:20px;">🏗</div>
+      <div style="font-size:56px;font-weight:900;color:var(--acc);letter-spacing:2px;text-align:center;line-height:1.1;">EXCAVATOR<br>SCALE</div>
+      <div style="display:flex;gap:12px;margin-top:16px;align-items:center;">
+        <div style="background:#2A2A2A;border-radius:20px;padding:8px 20px;"><span class="f-tiny c-pri">Phiên bản 2.0.4</span></div>
+        <div style="border:1px solid #22C55E;border-radius:20px;padding:8px 20px;display:flex;align-items:center;gap:6px;"><span style="color:#22C55E;">✅</span><span class="f-tiny" style="color:#22C55E;">Đã cập nhật</span></div>
+      </div>
+      <div class="f-sm c-sec" style="text-align:center;margin-top:16px;line-height:1.5;">Giải pháp cân xúc thông minh cho ngành khai thác và xây dựng.<br>Quản lý chính xác khối lượng vật liệu theo thời gian thực.</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="card" style="background:#1A1A1A;"><div class="f-tiny c-sec semi" style="margin-bottom:6px;">MÃ THIẾT BỊ</div><div class="f-sm bold c-pri">EXC-2024-0742</div></div>
+      <div class="card" style="background:#1A1A1A;"><div class="f-tiny c-sec semi" style="margin-bottom:6px;">KIỂU MÁY</div><div class="f-sm bold c-pri">CAT 320 GC</div></div>
+      <div class="card" style="background:#1A1A1A;"><div class="f-tiny c-sec semi" style="margin-bottom:6px;">FIRMWARE</div><div class="f-sm bold c-pri">v3.1.2-stable</div></div>
+      <div class="card" style="background:#1A1A1A;"><div class="f-tiny c-sec semi" style="margin-bottom:6px;">NGÀY KÍCH HOẠT</div><div class="f-sm bold c-pri">01/06/2024</div></div>
+      <div class="card" style="background:#1A1A1A;"><div class="f-tiny c-sec semi" style="margin-bottom:6px;">GIẤY PHÉP</div><div class="f-sm bold c-pri">Kinh Bắc Group — Enterprise</div></div>
+      <div class="card" style="background:#1A1A1A;"><div class="f-tiny c-sec semi" style="margin-bottom:6px;">HỖ TRỢ</div><div class="f-sm bold c-pri">support@kinhbac.vn</div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- .device -->
+<script>
+/* ══ SVG ICONS ══ */
+const IC = {
+  can:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14"/><path d="M5 3l7 8.5-7 9.5h14l-7-9.5L19 3"/><path d="M5 21h14"/></svg>`,
+  ord:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="3" rx="1.5"/><path d="M16 3h1a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h1"/><line x1="9" y1="10" x2="15" y2="10"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>`,
+  his:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><polyline points="12 7 12 12 15 15"/></svg>`,
+  rpt:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="9"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="13"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
+  set:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+};
+const NAV_KEYS=['can','ord','his','rpt','set'];
+function buildNav(id, activeIdx) {
+  const L=T[currentLang];
+  const lbls=[L.nav_can,L.nav_ord,L.nav_his,L.nav_rpt,L.nav_set];
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = NAV_KEYS.map((k,i)=>`
+    <div class="ntab${i===activeIdx?' active':''}" onclick="navTo(${i})">
+      <span style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;">${IC[k]}</span>
+      ${lbls[i]}
+    </div>`).join('');
+}
+
+/* ══ STATE ══ */
+let currentLang='vi';
+let weighing=false, wInt=null, wVal=0, tgt=25000;
+let npBuf='0', npStart=true;
+let fIdx=0, mTab=0;
+let pinBuf='', curPin='6688';
+let cpStep=0, cpBuf='', cpNew='';
+let cnpBuf='0';
+let maxW=12000, thresh=90;
+
+/* ══ CLOCK ══ */
+function tick(){
+  const now=new Date();
+  const t=now.toTimeString().slice(0,8);
+  const d=`${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  const hm=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  for(let i=0;i<5;i++){
+    const te=document.getElementById('t'+i);const de=document.getElementById('d'+i);
+    if(te)te.textContent=t;if(de)de.textContent=d;
+  }
+  const s3=document.getElementById('s3-time');if(s3)s3.textContent=hm;
+  const ct=document.getElementById('cfg-time');if(ct)ct.textContent=t;
+  const cd=document.getElementById('cfg-date');if(cd)cd.textContent=d;
+}
+setInterval(tick,1000);tick();
+
+/* ══ NAV ══ */
+function navTo(i){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const m={'cfg':'scr-cfg','net':'scr-net','calib':'scr-calib','info':'scr-info'};
+  const id=typeof i==='string'?(m[i]||'scr-'+i):'scr-'+i;
+  const el=document.getElementById(id);if(el)el.classList.add('active');
+}
+
+/* ══ NUMPAD (target weight) ══ */
+function fmt(v){const n=parseInt(v)||0;return n>=1000?`${Math.floor(n/1000)},${String(n%1000).padStart(3,'0')}`:String(n);}
+function npR(){document.getElementById('np-val').textContent=fmt(npBuf);}
+function npK(d){if(npBuf==='0'&&d!=='.')npBuf=d;else if(npBuf.length<7)npBuf+=d;npR();}
+function npDel(){npBuf=npBuf.length>1?npBuf.slice(0,-1):'0';npR();}
+function showNumpad(st){const L=T[currentLang];npBuf='0';npR();npStart=st;document.getElementById('np-modal').style.display='flex';document.getElementById('np-ok-btn').textContent=st?L.np_ok_start:L.np_ok_save;}
+function closeNP(){document.getElementById('np-modal').style.display='none';}
+function npOK(){
+  const v=parseInt(npBuf)||0;if(v<100)return;
+  tgt=v;
+  document.getElementById('s0-tgt').textContent=fmt(String(v));
+  closeNP();if(npStart)startW();
+}
+
+/* ══ WEIGHING ══ */
+function startW(){
+  const L=T[currentLang];
+  weighing=true;wVal=0;
+  document.getElementById('s0-btn').textContent=L.btn_stop;
+  document.getElementById('s0-btn').className='btn-pri red';
+  if(wInt)clearInterval(wInt);
+  wInt=setInterval(()=>{
+    wVal+=Math.random()*800+200;if(wVal>tgt)wVal=tgt;
+    const pct=Math.round((wVal/tgt)*100);
+    document.getElementById('s0-w').textContent=Math.round(wVal).toLocaleString();
+    document.getElementById('s0-bar').style.width=pct+'%';
+    document.getElementById('s0-pct').textContent=T[currentLang].pct_done+' '+pct+'%';
+    document.getElementById('s0-tot').textContent=Math.round(wVal).toLocaleString();
+    document.getElementById('s0-totpct').textContent=`${pct}% ${T[currentLang].of_target}`;
+    if(pct>=100){clearInterval(wInt);weighing=false;document.getElementById('s0-btn').textContent=T[currentLang].btn_complete;document.getElementById('s0-btn').className='btn-pri';}
+  },300);
+}
+function stopW(){weighing=false;if(wInt)clearInterval(wInt);document.getElementById('s0-btn').textContent=T[currentLang].btn_start;document.getElementById('s0-btn').className='btn-pri';}
+function s0Click(){if(weighing)stopW();else showNumpad(true);}
+
+/* ══ PENDING ORDERS ══ */
+const PENDS=[
+  {id:'ORD-8824-A',co:'Apex Build Co.',    mat:'Sỏi 3/4"',      kg:24500,badge:'Đã đồng bộ',bc:'#1A7F3C'},
+  {id:'ORD-8825-B',co:'Metro Paving',      mat:'Nhựa đường',    kg:18000,badge:'Nội bộ',    bc:'#7A5C00'},
+  {id:'ORD-8826-C',co:'Skyline Logistics', mat:'Cát hạt A',     kg:32000,badge:'Đã đồng bộ',bc:'#1A7F3C'},
+  {id:'ORD-8827-D',co:'Urban Infra',       mat:'Bê tông tái chế',kg:15500,badge:'Nội bộ',   bc:'#7A5C00'},
+];
+function showPending(){
+  document.getElementById('pend-list').innerHTML=PENDS.map((o,i)=>`
+    <div onclick="selOrder(${i})" style="background:#2A2A2A;border:1px solid #333;border-radius:8px;padding:20px;cursor:pointer;"
+         onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='#333'">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-size:20px;color:var(--sec);font-weight:700;">${o.id}</span><span style="background:${o.bc};padding:4px 12px;border-radius:6px;font-size:20px;color:#fff;font-weight:700;">${o.badge}</span></div>
+      <div style="font-size:32px;font-weight:800;color:#fff;margin-bottom:4px;">${o.co}</div>
+      <div style="font-size:22px;color:var(--sec);margin-bottom:8px;">${o.mat}</div>
+      <div style="font-size:44px;font-weight:900;color:var(--acc);">${fmt(String(o.kg))} KG</div>
+    </div>`).join('');
+  document.getElementById('pend-modal').style.display='flex';
+}
+function closePend(){document.getElementById('pend-modal').style.display='none';}
+function selOrder(i){
+  const o=PENDS[i];closePend();
+  tgt=o.kg;
+  // Update order card labels
+  const idEl=document.getElementById('s0-ord-id');if(idEl)idEl.textContent='ĐƠN #'+o.id;
+  const coEl=document.getElementById('s0-ord-co');if(coEl)coEl.textContent=o.co;
+  const matEl=document.getElementById('s0-ord-mat');if(matEl)matEl.textContent=o.mat;
+  const stEl=document.getElementById('s0-ord-st');if(stEl)stEl.textContent=o.badge;
+  document.getElementById('s0-tgt').textContent=fmt(String(o.kg));
+  npBuf=String(o.kg);npStart=true;showNumpad(true);
+}
+
+/* ══ ORDERS SCREEN ══ */
+const ORDS=[
+  {id:'ORD-8924',co:'Acme Construction',mat:'Đá dăm loại 1',kg:25000,st:'pending',tr:0,tot:3},
+  {id:'ORD-8921',co:'Metro Paving',     mat:'Nhựa đường',   kg:18000,st:'active', tr:5,tot:8},
+  {id:'ORD-8918',co:'Apex Build Co.',   mat:'Cát hạt A',    kg:32000,st:'done',   tr:12,tot:12},
+  {id:'ORD-8915',co:'Urban Infra',      mat:'Sỏi 3/4"',     kg:15500,st:'done',   tr:7, tot:7},
+];
+function buildOrds(){
+  const L=T[currentLang];
+  const g=document.getElementById('ord-grid');
+  const fs=[null,'active','done',null];const f=fs[fIdx];
+  const sh=ORDS.filter(o=>f===null||o.st===f);
+  g.innerHTML=sh.map(o=>{
+    const pct=Math.round((o.tr/o.tot)*100);
+    const b=o.st==='active'?{t:L.badge_active,c:'#1A4A7F'}:o.st==='done'?{t:L.badge_done,c:'#1A7F3C'}:{t:L.badge_pending,c:'#3A3A3A'};
+    return `<div onclick="goOrd(${o.kg})" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:var(--p-md);cursor:pointer;" onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span class="f-tiny c-sec semi">${o.id}</span><span class="badge f-tiny" style="background:${b.c};color:#fff;">${b.t}</span></div>
+      <div class="f-md bold c-pri" style="margin-bottom:4px;">${o.co}</div>
+      <div class="f-sm c-sec" style="margin-bottom:12px;">🚛 ${o.mat}</div>
+      <div class="f-lg bold c-acc" style="margin-bottom:4px;">${fmt(String(o.kg))}</div>
+      <div class="f-tiny c-sec">${L.badge_target}</div>
+      <div class="prog" style="height:24px;margin-top:12px;"><div class="prog-fill" style="width:${pct}%"></div><div class="prog-lbl" style="font-size:18px;">${pct}%</div></div>
+      <div class="f-tiny c-sec" style="margin-top:4px;">${o.tr}/${o.tot} ${L.badge_trips}</div>
+    </div>`;
+  }).join('');
+}
+function setF(i){fIdx=i;['f0','f1','f2','f3'].forEach((id,j)=>{document.getElementById(id).className='pill'+(j===i?' on':'');});buildOrds();}
+function goOrd(kg){navTo(0);tgt=kg;document.getElementById('s0-tgt').textContent=fmt(String(kg));npBuf=String(kg);npStart=true;showNumpad(true);}
+let dlT=null;
+function dlClick(){const b=document.getElementById('dl-btn');b.textContent=currentLang==='vi'?'⟳ Đang tải...':'⟳ Loading...';b.style.background='#B8960A';if(dlT)clearTimeout(dlT);dlT=setTimeout(()=>{b.textContent=T[currentLang].orders_load;b.style.background='var(--acc)';},2000);}
+
+/* ══ HISTORY ══ */
+const HIST=[
+  {co:'Công ty XD Hòa Bình',   mat:'Đá 1×2',  bs:'51C-123.45',t:'14:30',w:24500},
+  {co:'VLXD Tuấn Kiệt',        mat:'Cát vàng', bs:'30A-456.78',t:'13:15',w:18200},
+  {co:'Cty CP Bình Dương',      mat:'Đá dăm',   bs:'79B-789.01',t:'11:50',w:31000},
+  {co:'TM &amp; XD Hoàng Gia', mat:'Đá 0×4',   bs:'43C-234.56',t:'10:20',w:22800},
+  {co:'XD Thành Long',          mat:'Cát đen',  bs:'51D-567.89',t:'09:05',w:15600},
+];
+function buildHist(){
+  const L=T[currentLang];
+  document.getElementById('hist-list').innerHTML=HIST.map(h=>`
+    <div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:16px;">
+      <div style="width:52px;height:52px;background:#2A2A2A;border:1px solid #444;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;">🚛</div>
+      <div style="flex:1;"><div class="f-md bold c-pri">${h.co}</div><div class="f-sm c-sec">${h.mat} · ${h.bs}</div></div>
+      <div style="text-align:right;flex-shrink:0;"><div class="f-tiny c-sec">${h.t}</div><div class="f-tiny c-sec semi" style="margin:2px 0;">${L.hist_total_weight}</div><div class="f-md bold c-acc">${h.w.toLocaleString()} kg</div></div>
+    </div>`).join('');
+}
+
+/* ══ USB ══ */
+function showUSB(){document.getElementById('usb-modal').style.display='flex';}
+function closeUSB(){document.getElementById('usb-modal').style.display='none';}
+function usbSave(n){closeUSB();alert(`Đang xuất báo cáo vào USB ${n}...`);}
+
+/* ══ SETTINGS ══ */
+const SET_SVG={
+  cfg:`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  net:`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="2.5"/></svg>`,
+  calib:`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
+  info:`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16" stroke-width="2.5"/></svg>`,
+  pin:`<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+};
+function buildSet(){
+  const L=T[currentLang];
+  const items=[
+    {ico:SET_SVG.cfg,   label:L.set_cfg,   dest:'cfg',   pin:false},
+    {ico:SET_SVG.net,   label:L.set_net,   dest:'net',   pin:false},
+    {ico:SET_SVG.calib, label:L.set_calib, dest:'calib', pin:true},
+    {ico:SET_SVG.info,  label:L.set_info,  dest:'info',  pin:false},
+  ];
+  const chev=`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>`;
+  document.getElementById('set-list').innerHTML=
+    items.map(s=>`
+      <div onclick="${s.pin?'showPIN()':'navTo(\''+s.dest+'\')'}"
+           style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:var(--p-md);display:flex;align-items:center;gap:var(--p-md);cursor:pointer;transition:.15s;"
+           onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <div style="width:70px;height:70px;background:#1E1E1E;border:1px solid #3A3A3A;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${s.ico}</div>
+        <div style="flex:1;"><div class="f-md bold c-pri">${s.label}</div></div>
+        ${chev}
+      </div>`).join('')+
+    `<div class="f-tiny c-sec semi" style="letter-spacing:2px;margin-top:8px;">${L.set_tech}</div>
+     <div style="height:1px;background:var(--border);"></div>
+     <div onclick="showCHP()" style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:var(--p-md);display:flex;align-items:center;gap:var(--p-md);cursor:pointer;transition:.15s;" onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">
+       <div style="width:70px;height:70px;background:#1E1E1E;border:1px solid #3A3A3A;border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${SET_SVG.pin}</div>
+       <div style="flex:1;"><div class="f-md bold c-pri">${L.set_pin}</div><div class="f-sm c-sec">${L.set_pin_sub}</div></div>
+       ${chev}
+     </div>`;
+}
+
+/* ══ PIN MODAL ══ */
+function showPIN(){pinBuf='';pinR();document.getElementById('pin-err').textContent='';document.getElementById('pin-modal').style.display='flex';}
+function closePIN(){document.getElementById('pin-modal').style.display='none';}
+function pinR(){for(let i=0;i<4;i++){const e=document.getElementById('pd'+i);if(e)e.className='pin-dot'+(i<pinBuf.length?' on':'');}}
+function pinK(d){if(pinBuf.length<4){pinBuf+=d;pinR();document.getElementById('pin-err').textContent='';}}
+function pinDel(){pinBuf=pinBuf.slice(0,-1);pinR();}
+function pinOK(){
+  if(pinBuf===curPin){closePIN();navTo('calib');}
+  else{document.getElementById('pin-err').textContent='Mã PIN không đúng. Vui lòng thử lại.';pinBuf='';pinR();}
+}
+
+/* ══ CHANGE PIN ══ */
+const CP_SUB=['Nhập mã PIN hiện tại (4 chữ số)','Nhập mã PIN mới (4 chữ số)','Xác nhận mã PIN mới'];
+const CP_BTN=['TIẾP THEO →','TIẾP THEO →','✓ XÁC NHẬN ĐỔI MÃ'];
+function showCHP(){cpStep=0;cpBuf='';cpNew='';cpR();document.getElementById('cp-ok').style.display='none';document.getElementById('cp-numpad').style.display='block';document.getElementById('chpin-modal').style.display='flex';}
+function closeCHP(){document.getElementById('chpin-modal').style.display='none';}
+function cpR(){
+  for(let i=0;i<4;i++){const e=document.getElementById('cp'+i);if(e)e.className='pin-dot'+(i<cpBuf.length?' on':'');}
+  document.getElementById('cp-sub').textContent=CP_SUB[cpStep];
+  document.getElementById('cp-next').textContent=CP_BTN[cpStep];
+  document.getElementById('cp-err').textContent='';
+  ['cps1','cps2','cps3'].forEach((id,i)=>{document.getElementById(id).style.background=i<=cpStep?'var(--acc)':'#333';});
+}
+function cpK(d){if(cpBuf.length<4){cpBuf+=d;for(let i=0;i<4;i++){const e=document.getElementById('cp'+i);if(e)e.className='pin-dot'+(i<cpBuf.length?' on':'');}document.getElementById('cp-err').textContent='';}}
+function cpDel(){cpBuf=cpBuf.slice(0,-1);for(let i=0;i<4;i++){const e=document.getElementById('cp'+i);if(e)e.className='pin-dot'+(i<cpBuf.length?' on':'');}}
+function cpNext(){
+  const err=document.getElementById('cp-err');
+  if(cpBuf.length<4){err.textContent='Vui lòng nhập đủ 4 chữ số.';return;}
+  if(cpStep===0){if(cpBuf!==curPin){err.textContent='Mã PIN hiện tại không đúng.';cpBuf='';cpR();return;}cpStep=1;cpBuf='';cpR();}
+  else if(cpStep===1){cpNew=cpBuf;cpStep=2;cpBuf='';cpR();}
+  else{if(cpBuf!==cpNew){err.textContent='Xác nhận không khớp. Nhập lại.';cpBuf='';cpR();return;}
+    curPin=cpNew;document.getElementById('cp-numpad').style.display='none';document.getElementById('cp-ok').style.display='block';
+    setTimeout(closeCHP,2200);}
+}
+
+/* ══ TOGGLE ══ */
+function togClick(id){const e=document.getElementById(id);e.classList.toggle('on');e.classList.toggle('off');}
+
+/* ══ BRIGHTNESS ══ */
+function setBright(v){
+  document.getElementById('lbl-bright').textContent=v;
+  const overlay=document.getElementById('bright-overlay');
+  if(overlay) overlay.style.opacity=((100-parseInt(v))/100*0.82).toFixed(3);
+}
+
+/* ══ CONFIG SLIDERS ══ */
+function updateMaxW(v){
+  maxW=parseInt(v);
+  document.getElementById('lbl-maxw').innerHTML=`${maxW.toLocaleString()} <span class="f-sm c-sec">KG</span>`;
+  updateThresh(document.getElementById('sl-thresh').value);
+}
+function updateThresh(v){
+  thresh=parseInt(v);
+  document.getElementById('lbl-thresh').textContent=thresh+'%';
+  const lim=Math.round(maxW*thresh/100);
+  document.getElementById('warn-lbl').textContent=`Còi báo khi tải > ${lim.toLocaleString()} KG (${thresh}% của ${maxW.toLocaleString()} KG)`;
+}
+/* ══ TRANSLATIONS ══ */
+const T={
+  vi:{
+    app_name:'CÂN MÁY XÚC',
+    nav_can:'CÂN', nav_ord:'ĐƠN HÀNG', nav_his:'LỊCH SỬ', nav_rpt:'BÁO CÁO', nav_set:'CÀI ĐẶT',
+    bucket_current:'GÀU HIỆN TẠI:',
+    total_loaded:'Tổng đã tải',
+    target_label:'MỤC TIÊU ✎',
+    tap_to_edit:'Nhấn để chỉnh',
+    pct_done:'HOÀN THÀNH',
+    btn_start:'▶  BẮT ĐẦU CÂN', btn_stop:'■  DỪNG CÂN', btn_complete:'✓  HOÀN THÀNH', btn_reset:'↺  RESET',
+    np_ok_start:'BẮT ĐẦU', np_ok_save:'LƯU MỤC TIÊU',
+    orders_title:'ĐƠN HÀNG', orders_sub:'Quản lý và theo dõi đơn hàng', orders_load:'⬇ TẢI ĐƠN MỚI',
+    filter_all:'TẤT CẢ', filter_active:'ĐANG THỰC HIỆN', filter_done:'ĐÃ HOÀN THÀNH', filter_today:'HÔM NAY',
+    badge_active:'Đang thực hiện', badge_done:'Hoàn thành', badge_pending:'Chờ xử lý',
+    badge_trips:'chuyến', badge_target:'kg mục tiêu',
+    hist_title:'LỊCH SỬ CÂN', hist_sub:'Chi tiết các lần cân gần đây',
+    hist_filter:'LỌC', hist_date:'Tất cả ngày', hist_mat:'Tất cả vật liệu',
+    hist_total_weight:'TỔNG KHỐI LƯỢNG',
+    rpt_title:'Báo cáo & Thống kê', rpt_sub:'Tổng quan hiệu suất hôm nay',
+    set_cfg:'Cấu hình Thiết bị', set_net:'Cài đặt Mạng', set_calib:'Hiệu chuẩn',
+    set_info:'Thông tin Ứng dụng', set_pin:'Đổi mã PIN / Mật khẩu',
+    set_pin_sub:'Cập nhật thông tin bảo mật hệ thống', set_tech:'KỸ THUẬT VIÊN CAO CẤP',
+    back_btn:'‹ Quay lại',
+    cfg_title:'THIẾT LẬP THIẾT BỊ', net_title:'CÀI ĐẶT MẠNG',
+
+    calib_title:'HIỆU CHUẨN', calib_sub:'Căn chỉnh hệ thống & Tinh chỉnh cảm biến',
+    calib_type:'LOẠI MÁY XÚC', calib_gau:'XÚC GẦU', calib_lat:'XÚC LẬT',
+    calib_save:'LƯU KẾT QUẢ HIỆU CHUẨN', calib_saved:'✅ Đã lưu kết quả hiệu chuẩn!',
+    info_title:'THÔNG TIN',
+    screen_lbl:'Màn hình', audio_lbl:'Âm thanh', load_lbl:'Giới hạn tải trọng',
+    lang_lbl:'Ngôn ngữ', time_lbl:'Thời gian & Ngày tháng',
+    brightness_lbl:'Độ sáng', volume_lbl:'Âm lượng',
+    overload_warn:'Cảnh báo quá tải', overload_sub:'Phát âm thanh khi vượt ngưỡng',
+    max_weight:'Tải trọng tối đa', threshold:'Ngưỡng cảnh báo còi',
+    dark_lbl:'Tối', bright_lbl:'Sáng',
+    ntp_label:'Đồng bộ NTP tự động', ntp_sub:'Tự động cập nhật giờ qua mạng',
+    save_time:'LƯU CÀI ĐẶT THỜI GIAN',
+    of_target:'của mục tiêu',
+    lang_toast:'Đã lưu — Tiếng Việt',
+  },
+  en:{
+    app_name:'EXCAVATOR SCALE',
+    nav_can:'SCALE', nav_ord:'ORDERS', nav_his:'HISTORY', nav_rpt:'REPORTS', nav_set:'SETTINGS',
+    bucket_current:'CURRENT BUCKET:',
+    total_loaded:'Total Loaded',
+    target_label:'TARGET ✎',
+    tap_to_edit:'Tap to edit',
+    pct_done:'COMPLETED',
+    btn_start:'▶  START WEIGHING', btn_stop:'■  STOP WEIGHING', btn_complete:'✓  COMPLETED', btn_reset:'↺  RESET',
+    np_ok_start:'START', np_ok_save:'SAVE TARGET',
+    orders_title:'ORDERS', orders_sub:'Manage and track orders', orders_load:'⬇ LOAD NEW ORDER',
+    filter_all:'ALL', filter_active:'IN PROGRESS', filter_done:'COMPLETED', filter_today:'TODAY',
+    badge_active:'In Progress', badge_done:'Completed', badge_pending:'Pending',
+    badge_trips:'trips', badge_target:'kg target',
+    hist_title:'WEIGHING HISTORY', hist_sub:'Recent weighing sessions',
+    hist_filter:'FILTER', hist_date:'All dates', hist_mat:'All materials',
+    hist_total_weight:'TOTAL WEIGHT',
+    rpt_title:'Reports & Statistics', rpt_sub:"Today\'s performance overview",
+    set_cfg:'Device Configuration', set_net:'Network Settings', set_calib:'Calibration',
+    set_info:'App Information', set_pin:'Change PIN / Password',
+    set_pin_sub:'Update system security credentials', set_tech:'SENIOR TECHNICIAN',
+    back_btn:'‹ Back',
+    cfg_title:'DEVICE SETTINGS', net_title:'NETWORK SETTINGS',
+
+    calib_title:'CALIBRATION', calib_sub:'System alignment & Sensor fine-tuning',
+    calib_type:'EXCAVATOR TYPE', calib_gau:'BUCKET EXCAVATOR', calib_lat:'TILT EXCAVATOR',
+    calib_save:'SAVE CALIBRATION', calib_saved:'✅ Calibration saved!',
+    info_title:'ABOUT',
+    screen_lbl:'Display', audio_lbl:'Audio', load_lbl:'Load Limit',
+    lang_lbl:'Language', time_lbl:'Time & Date',
+    brightness_lbl:'Brightness', volume_lbl:'Volume',
+    overload_warn:'Overload Warning', overload_sub:'Sound alarm when limit exceeded',
+    max_weight:'Maximum Load', threshold:'Alarm threshold',
+    dark_lbl:'Dark', bright_lbl:'Bright',
+    ntp_label:'Auto NTP Sync', ntp_sub:'Automatically update time via network',
+    save_time:'SAVE TIME SETTINGS',
+    of_target:'of target',
+    lang_toast:'Saved — English',
+  }
+};
+
+/* ══ i18n APPLY ══ */
+function applyLang(l){
+  const tr=T[l];
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k=el.getAttribute('data-i18n');
+    if(tr[k]!==undefined) el.textContent=tr[k];
+  });
+  [0,1,2,3,4].forEach(i=>buildNav('nb'+i,i));
+  buildSet();
+  buildOrds();
+  buildHist();
+  buildSMx();
+  buildWifiList(WIFI_NETS);
+  // s0 button
+  const btn=document.getElementById('s0-btn');
+  if(btn&&!weighing) btn.textContent=tr.btn_start;
+  // progress label
+  const pctEl=document.getElementById('s0-pct');
+  if(pctEl){const m=pctEl.textContent.match(/(\d+)/);if(m)pctEl.textContent=tr.pct_done+' '+m[1]+'%';}
+  // totpct
+  const tpEl=document.getElementById('s0-totpct');
+  if(tpEl){const m=tpEl.textContent.match(/(\d+)/);if(m)tpEl.textContent=m[1]+'% '+tr.of_target;}
+  // save time btn
+  const stBtn=document.querySelector('#scr-cfg .btn-pri');
+  if(stBtn)stBtn.innerHTML=`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.2" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> ${tr.save_time}`;
+  document.documentElement.lang=l;
+}
+function showToast(msg){
+  let t=document.getElementById('lang-toast');
+  if(!t){t=document.createElement('div');t.id='lang-toast';Object.assign(t.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'#2A2A2A',border:'1px solid var(--acc)',color:'var(--acc)',padding:'12px 28px',borderRadius:'30px',fontSize:'13px',fontWeight:'800',letterSpacing:'1px',zIndex:'9999',opacity:'0',transition:'opacity .3s',pointerEvents:'none',fontFamily:"'Hubot Sans','Alumni Sans',sans-serif"});document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';clearTimeout(t._t);t._t=setTimeout(()=>{t.style.opacity='0';},1600);
+}
+
+function setLang(l){
+  currentLang=l;
+  document.getElementById('lang-vi').style.background=l==='vi'?'var(--acc)':'#2A2A2A';
+  document.getElementById('lang-vi').style.color=l==='vi'?'#1A1A1A':'var(--sec)';
+  document.getElementById('lang-en').style.background=l==='en'?'var(--acc)':'#2A2A2A';
+  document.getElementById('lang-en').style.color=l==='en'?'#1A1A1A':'var(--sec)';
+  applyLang(l);
+  showToast(T[l].lang_toast);
+}
+function saveTime(){
+  const ts=document.getElementById('time-saved');ts.style.display='block';setTimeout(()=>ts.style.display='none',2000);
+}
+function forcSync(){
+  const b=document.getElementById('sync-btn');b.textContent='⟳ Đang đồng bộ...';
+  setTimeout(()=>{b.textContent='✅ Đồng bộ xong';setTimeout(()=>{b.textContent='⟳ BUỘC ĐỒNG BỘ';},2000);},1800);
+}
+// Init time inputs
+(function(){
+  const now=new Date();
+  const ti=document.getElementById('inp-time');if(ti)ti.value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const di=document.getElementById('inp-date');if(di)di.value=now.toISOString().slice(0,10);
+})();
+
+/* ══ WIFI SCAN ══ */
+const WIFI_NETS=[
+  {ssid:'SITE_MESH_ALPHA',  sec:'WPA2',freq:'5GHz', sig:90, connected:true},
+  {ssid:'MAINTENANCE_NET',  sec:'WPA2',freq:'2.4GHz',sig:75,connected:false},
+  {ssid:'ESP32_HOTSPOT',    sec:'WPA2',freq:'2.4GHz',sig:60,connected:false},
+  {ssid:'Viettel_4G_Bridge',sec:'WPA2',freq:'2.4GHz',sig:45,connected:false},
+  {ssid:'OPEN_WIFI',        sec:'Mở',  freq:'2.4GHz',sig:30,connected:false},
+];
+let wifiScanT=null;
+function sigBar(s){const c=s>70?'#22C55E':s>40?'#EAB308':'#EF4444';return `<span style="display:inline-flex;align-items:flex-end;gap:2px;height:20px;">${[25,50,75,100].map((t,i)=>`<span style="width:5px;height:${(i+1)*5}px;border-radius:1px;background:${s>=t?c:'#333'};"></span>`).join('')}</span>`;}
+function buildWifiList(nets){
+  document.getElementById('wifi-list').innerHTML=nets.map((n,i)=>{
+    if(n.connected)return '';
+    return `<div onclick="openWifiModal(${i})" style="background:#1A1A1A;border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer;" onmouseenter="this.style.borderColor='var(--acc)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="1.6" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+      <div style="flex:1;"><div class="f-sm bold c-pri">${n.ssid}</div><div class="f-tiny c-sec">${n.sec} · ${n.freq}</div></div>
+      ${sigBar(n.sig)}
+      ${n.sec!=='Mở'?`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`:''}
+    </div>`;
+  }).join('');
+}
+function scanWifi(){
+  const btn=document.getElementById('scan-btn');
+  btn.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-9-9"/></svg> ${currentLang==='vi'?'ĐANG QUÉT...':'SCANNING...'}`;
+  btn.style.opacity='.6';
+  document.getElementById('wifi-list').innerHTML=`<div style="text-align:center;padding:20px;" class="f-sm c-sec">${currentLang==='vi'?'Đang tìm kiếm mạng...':'Searching for networks...'}</div>`;
+  if(wifiScanT)clearTimeout(wifiScanT);
+  wifiScanT=setTimeout(()=>{
+    btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg> QUÉT LẠI';
+    btn.style.opacity='1';
+    buildWifiList(WIFI_NETS);
+  },1800);
+}
+let wifiSelIdx=0;
+function openWifiModal(i){
+  wifiSelIdx=i;const n=WIFI_NETS[i];
+  document.getElementById('wifi-ssid-title').textContent=n.ssid;
+  document.getElementById('wifi-ssid-sub').textContent=n.sec==='Mở'?'Mạng không có mật khẩu':'Nhập mật khẩu để kết nối';
+  document.getElementById('wifi-sec-type').textContent=n.sec;
+  document.getElementById('wifi-freq').textContent=n.freq;
+  document.getElementById('wifi-sig').textContent=n.sig>70?'Mạnh':n.sig>40?'Trung bình':'Yếu';
+  document.getElementById('wifi-pw').value='';
+  document.getElementById('wifi-connecting').style.display='none';
+  document.getElementById('wifi-modal').style.display='flex';
+}
+function closeWifi(){document.getElementById('wifi-modal').style.display='none';}
+function togglePW(){const i=document.getElementById('wifi-pw');i.type=i.type==='password'?'text':'password';}
+function connectWifi(){
+  const c=document.getElementById('wifi-connecting');c.style.display='block';
+  setTimeout(()=>{closeWifi();const n=WIFI_NETS[wifiSelIdx];n.connected=true;WIFI_NETS.find(x=>x.connected&&x.ssid!==n.ssid&&(x.connected=false));buildWifiList(WIFI_NETS);},2000);
+}
+
+
+/* ══ CALIBRATION ══ */
+const S_GAU=[
+  {g:'ÁP SUẤT (BAR)',n:'P1',v:145.2,w:false},{g:null,n:'P2',v:144.8,w:false},
+  {g:null,n:'P3',v:12.4,w:true},{g:null,n:'P4',v:146.0,w:false},
+  {g:null,n:'P5',v:142.5,w:false},{g:null,n:'P6',v:138.9,w:false},
+  {g:'GÓC (ĐỘ)',n:'A1',v:45.5,w:false},{g:null,n:'A2',v:-12.0,w:false},
+  {g:null,n:'A3',v:15.2,w:false},{g:null,n:'A4',v:8.4,w:false},
+];
+const S_LAT=[
+  {g:'ÁP SUẤT (BAR)',n:'P1',v:148.3,w:false},{g:null,n:'P2',v:147.1,w:false},
+  {g:'GÓC (ĐỘ)',n:'A1',v:44.8,w:false},{g:null,n:'A2',v:-11.2,w:false},
+];
+const S_NOTE=[
+  [{k:'P1–P6',d:'Xy lanh Cán chính, Tay gầu & Gầu'},{k:'A1–A4',d:'Thân máy & Các đoạn cần'}],
+  [{k:'P1–P2',d:'Xy lanh nâng & nghiêng'},{k:'A1–A2',d:'Thân máy & Gầu lật'},{k:'PR1',d:'Cảm biến tiệm cận'}]
+];
+function buildSMx(){
+  const ss=mTab===0?S_GAU:S_LAT, notes=S_NOTE[mTab];
+  const c=document.getElementById('sensor-mx'); if(!c)return;
+  let h=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="1.8"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    <span class="f-sm bold c-pri" style="letter-spacing:1px;">${currentLang==='vi'?'MA TRẬN CẢM BIẾN':'SENSOR MATRIX'}</span>
+  </div>`;
+  let lg=null;
+  ss.forEach(s=>{
+    if(s.g&&s.g!==lg){lg=s.g;h+=`<div class="f-xs c-sec semi" style="letter-spacing:1px;margin:12px 0 6px;padding-bottom:5px;border-bottom:1px solid #2A2A2A;">${s.g}</div>`;}
+    const vc=s.w?'#EAB308':'#fff';
+    h+=`<div style="display:flex;align-items:center;background:#1A1A1A;border:1px solid #282828;border-radius:8px;padding:12px 16px;margin-bottom:7px;">
+      <div style="display:flex;align-items:center;gap:12px;flex:1;">
+        <div style="width:12px;height:12px;border-radius:50%;background:${s.w?'#EAB308':'#22C55E'};flex-shrink:0;box-shadow:0 0 6px ${s.w?'#EAB30866':'#22C55E66'};"></div>
+        <span class="f-md bold c-pri">${s.n}</span>
+      </div>
+      <span style="font-size:34px;font-weight:800;color:${vc};">${s.v.toFixed(1)}</span>
+    </div>`;
+  });
+  const noteLines=notes.map(n=>`<div style="display:flex;gap:6px;margin-bottom:4px;"><span style="color:var(--acc);font-weight:700;flex-shrink:0;">${n.k}:</span><span style="color:#999;">${n.d}</span></div>`).join('');
+  h+=`<div style="background:#111;border:1px solid #252525;border-radius:var(--r-sm);padding:14px 16px;margin-top:14px;">
+    <div class="f-xs c-acc semi" style="margin-bottom:8px;letter-spacing:1px;">${currentLang==='vi'?'CHÚ GIẢI VỊ TRÍ':'POSITION LEGEND'}</div>
+    <div class="f-xs" style="line-height:1.7;">${noteLines}</div>
+  </div>
+  <div class="f-xs c-dim" style="margin-top:10px;text-align:right;">${currentLang==='vi'?'ĐỒNG BỘ LẦN CUỐI':'LAST SYNC'}: ${new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>`;
+  c.innerHTML=h;
+}
+function setMTab(t){
+  mTab=t;
+  document.getElementById('tab-gau').style.background=t===0?'var(--acc)':'#2A2A2A';
+  document.getElementById('tab-gau').style.color=t===0?'#1A1A1A':'var(--sec)';
+  document.getElementById('tab-lat').style.background=t===1?'var(--acc)':'#2A2A2A';
+  document.getElementById('tab-lat').style.color=t===1?'#1A1A1A':'var(--sec)';
+  buildSMx();
+}
+function showCalibNP(){cnpBuf='0';document.getElementById('cnp-val').textContent='0.00';document.getElementById('cnp-modal').style.display='flex';}
+function closeCalibNP(){document.getElementById('cnp-modal').style.display='none';}
+function cnpK(d){if(cnpBuf==='0'&&d!='.')cnpBuf=d;else if(cnpBuf.length<8)cnpBuf+=d;document.getElementById('cnp-val').textContent=parseFloat(cnpBuf||0).toFixed(2);}
+function cnpDel(){cnpBuf=cnpBuf.length>1?cnpBuf.slice(0,-1):'0';document.getElementById('cnp-val').textContent=parseFloat(cnpBuf||0).toFixed(2);}
+function cnpOK(){document.getElementById('calib-val').textContent=parseFloat(cnpBuf||0).toFixed(2);closeCalibNP();}
+function calibSave(){
+  const L=T[currentLang];
+  const b=document.querySelector('#scr-calib .btn-pri');
+  b.textContent=L.calib_saved; b.style.background='#166534'; b.style.color='#4ADE80';
+  setTimeout(()=>{b.innerHTML=`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" stroke-width="2.2" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> ${L.calib_save}`;b.style.background='var(--acc)';b.style.color='#1A1A1A';},2200);
+}
+
+/* ══ INIT ══ */
+[0,1,2,3,4].forEach(i=>buildNav('nb'+i,i));
+buildOrds(); buildHist(); buildSet(); buildSMx();
+buildWifiList(WIFI_NETS);
+// Add CSS spin animation
+const st=document.createElement('style');st.textContent='@keyframes spin{to{transform:rotate(360deg)}}';document.head.appendChild(st);
+</script>
+</body>
+</html>
