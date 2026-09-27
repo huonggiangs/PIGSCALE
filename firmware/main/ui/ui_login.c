@@ -140,6 +140,15 @@ lv_obj_t *ui_login_create(lv_obj_t *parent)
         lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_center(col);
         lv_obj_clear_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+        /* lv_obj_create() BẬT SẴN LV_OBJ_FLAG_CLICKABLE theo mặc định của LVGL
+           (lv_obj.c: obj->flags = LV_OBJ_FLAG_CLICKABLE) — remove_style_all()
+           chỉ xoá style, KHÔNG xoá cờ này. col nằm đè lên btn nên nó "cướp"
+           điểm chạm đúng vùng nó phủ tới (chỗ có chữ) mà không có handler nào
+           → bấm vào chữ không có tác dụng, chỉ bấm ra ngoài col (viền nút)
+           mới rơi đúng vào btn. Đây là nguyên nhân thật của lỗi "bấm chữ
+           không ăn" trên toàn bộ card có cấu trúc container-lồng-container
+           kiểu này — không phải lỗi hiệu chỉnh cảm ứng. */
+        lv_obj_remove_flag(col, LV_OBJ_FLAG_CLICKABLE);
 
         lv_obj_t *name = lv_label_create(col);
         lv_label_set_text(name, st->employees[i].name);

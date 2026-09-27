@@ -183,6 +183,11 @@ static void build_wifi_section(lv_obj_t *host)
     lv_obj_set_style_pad_column(scan_row, 4, 0);
     lv_obj_set_size(scan_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(scan_row, LV_OBJ_FLAG_SCROLLABLE);
+    /* lv_obj_create() mặc định BẬT LV_OBJ_FLAG_CLICKABLE — nằm đè lên
+       scan_btn nên cướp mất điểm chạm đúng chỗ có icon/chữ "Quét lại". Đây
+       mới là nguyên nhân THẬT của việc bấm nút không ăn (không chỉ do quét
+       lâu) — xem giải thích đầy đủ trong ui_login.c. */
+    lv_obj_remove_flag(scan_row, LV_OBJ_FLAG_CLICKABLE);
     ui_common_icon(scan_row, &img_icon_refresh, scanning ? UI_COLOR_ICON : UI_COLOR_PRIMARY);
     lv_obj_t *scan_lbl = lv_label_create(scan_row);
     lv_label_set_text(scan_lbl, scanning ? "Đang quét..." : "Quét lại");

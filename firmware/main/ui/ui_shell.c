@@ -163,6 +163,10 @@ static void build_sub_bar(lv_obj_t *parent)
     lv_obj_set_style_pad_column(station_row, 4, 0);
     lv_obj_set_size(station_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(station_row, LV_OBJ_FLAG_SCROLLABLE);
+    /* lv_obj_create() mặc định BẬT LV_OBJ_FLAG_CLICKABLE — nằm đè lên
+       station_btn nên cướp mất điểm chạm đúng chỗ có chữ "Đổi trạm cân"
+       (xem giải thích đầy đủ trong ui_login.c). */
+    lv_obj_remove_flag(station_row, LV_OBJ_FLAG_CLICKABLE);
     s_station_btn_label = lv_label_create(station_row);
     lv_label_set_text(s_station_btn_label, "Đổi trạm cân");
     lv_obj_set_style_text_color(s_station_btn_label, UI_COLOR_PRIMARY, 0);

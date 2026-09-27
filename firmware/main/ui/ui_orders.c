@@ -210,6 +210,10 @@ lv_obj_t *ui_orders_create(lv_obj_t *parent)
     lv_obj_set_style_pad_column(refresh_row, 6, 0);
     lv_obj_set_size(refresh_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(refresh_row, LV_OBJ_FLAG_SCROLLABLE);
+    /* lv_obj_create() mặc định BẬT LV_OBJ_FLAG_CLICKABLE — nằm đè lên
+       refresh_btn nên cướp mất điểm chạm đúng chỗ có icon/chữ "Làm mới"
+       (xem giải thích đầy đủ trong ui_login.c). */
+    lv_obj_remove_flag(refresh_row, LV_OBJ_FLAG_CLICKABLE);
     ui_common_icon(refresh_row, &img_icon_refresh, UI_COLOR_PRIMARY);
     lv_obj_t *refresh_lbl = lv_label_create(refresh_row);
     lv_label_set_text(refresh_lbl, "Làm mới");
