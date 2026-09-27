@@ -77,11 +77,13 @@ static void build_order_card(lv_obj_t *parent, order_t *o, bool any_other_weighi
     lv_obj_set_style_pad_row(card, 6, 0);
 
     /* hàng mã đơn + badges */
+    /* Mã đơn bên trái, 2 badge (Nhập/Xuất + trạng thái) bên phải — cùng cột
+       với "Xe" ở hàng dưới, theo đúng yêu cầu (trước đó badge nằm ngay sau
+       mã đơn, lệch trái). */
     lv_obj_t *head = lv_obj_create(card);
     lv_obj_remove_style_all(head);
     lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(head, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(head, 8, 0);
+    lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_width(head, LV_PCT(100));
     lv_obj_set_height(head, LV_SIZE_CONTENT);
     lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE);
@@ -91,15 +93,28 @@ static void build_order_card(lv_obj_t *parent, order_t *o, bool any_other_weighi
     lv_obj_set_style_text_font(code, UI_FONT_H4_BOLD, 0);
     lv_obj_set_style_text_color(code, UI_COLOR_HEADING, 0);
 
+    lv_obj_t *badges = lv_obj_create(head);
+    lv_obj_remove_style_all(badges);
+    lv_obj_set_flex_flow(badges, LV_FLEX_FLOW_ROW);
+    /* START chứ không phải END: với container LV_SIZE_CONTENT, align END
+       trên trục chính khiến LVGL tính sai bề rộng tự động (đã xác nhận là
+       nguyên nhân "mất" cụm Wi-Fi/P5/Cam trên header — xem ui_shell.c).
+       "badges" đã tự nằm bên phải nhờ head dùng SPACE_BETWEEN nên không
+       cần align END ở đây. */
+    lv_obj_set_flex_align(badges, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(badges, 8, 0);
+    lv_obj_set_size(badges, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(badges, LV_OBJ_FLAG_SCROLLABLE);
+
     bool is_import = (o->ticket_type == TICKET_IMPORT);
-    ui_common_badge(head, is_import ? "Nhập" : "Xuất",
+    ui_common_badge(badges, is_import ? "Nhập" : "Xuất",
                      is_import ? UI_COLOR_SUCCESS_BG : UI_COLOR_WARNING_BG,
                      is_import ? UI_COLOR_SUCCESS : UI_COLOR_ORANGE_700);
 
     lv_color_t st_bg = UI_COLOR_MIST_100, st_fg = UI_COLOR_BODY;
     if (o->status == ORDER_WEIGHING) { st_bg = UI_COLOR_PRIMARY_SOFT; st_fg = UI_COLOR_PRIMARY; }
     else if (o->status == ORDER_DONE) { st_bg = UI_COLOR_SUCCESS_BG; st_fg = UI_COLOR_SUCCESS; }
-    ui_common_badge(head, status_label(o->status), st_bg, st_fg);
+    ui_common_badge(badges, status_label(o->status), st_bg, st_fg);
 
     lv_obj_t *cust = lv_label_create(card);
     char buf[96];

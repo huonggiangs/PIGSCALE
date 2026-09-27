@@ -62,12 +62,11 @@ static lv_obj_t *make_status_cluster_ex(lv_obj_t *parent, const char *label, lv_
     lv_obj_set_size(c, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(c, LV_OBJ_FLAG_SCROLLABLE);
 
-    /* Icon (nếu có) dựng NGAY THỨ TỰ ĐÚNG từ đầu — KHÔNG dùng
-       lv_obj_move_to_index() để chèn lại sau, vì đã xác nhận qua log
-       (lv_obj_get_width) rằng làm vậy khiến "right" (cha, LV_SIZE_CONTENT)
-       không tính lại đúng kích thước tự động, co về gần như 0 và đẩy các
-       cụm trạng thái ra ngoài màn hình (x âm) — đây là lý do Wi-Fi/P5/Cam
-       "biến mất" khỏi header. */
+    /* Icon (nếu có) dựng NGAY THỨ TỰ ĐÚNG từ đầu, không dùng move_to_index().
+       Nguyên nhân thật của việc Wi-Fi/P5/Cam "biến mất" khỏi header (xác
+       nhận qua log hdr_dbg2) là ở "right" (cha, xem build_status_bar):
+       flex align END trên trục chính kết hợp LV_SIZE_CONTENT khiến LVGL
+       tính sai bề rộng tự động — đã sửa ở nơi tạo "right" (dùng START). */
     if (icon_src && out_icon) {
         *out_icon = ui_common_icon(c, icon_src, lv_color_white());
     }
@@ -119,7 +118,12 @@ static void build_status_bar(lv_obj_t *parent)
     lv_obj_t *right = lv_obj_create(s_status_bar);
     lv_obj_remove_style_all(right);
     lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    /* LV_FLEX_ALIGN_START (không phải END): với container LV_SIZE_CONTENT,
+       flex align END trên trục chính khiến LVGL tính sai bề rộng nội dung
+       (chỉ tính theo phần tử cuối), đẩy các phần tử trước ra toạ độ âm rồi
+       bị clip mất — đây là nguyên nhân thật của lỗi "thiếu Wi-Fi/P5/Cam".
+       Việc căn phải cả cụm đã có sẵn qua lv_obj_align(RIGHT_MID) bên dưới. */
+    lv_obj_set_flex_align(right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(right, 16, 0);
     lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_align(right, LV_ALIGN_RIGHT_MID, 0, 0);
@@ -222,7 +226,9 @@ static void build_sub_bar(lv_obj_t *parent)
     lv_obj_t *right = lv_obj_create(s_sub_bar);
     lv_obj_remove_style_all(right);
     lv_obj_set_flex_flow(right, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    /* Cùng lỗi END+SIZE_CONTENT như status bar phía trên — dùng START để
+       LVGL tính đúng bề rộng nội dung (tránh "Nhân viên cân" bị cắt chữ). */
+    lv_obj_set_flex_align(right, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(right, 14, 0);
     lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_align(right, LV_ALIGN_RIGHT_MID, 0, 0);
