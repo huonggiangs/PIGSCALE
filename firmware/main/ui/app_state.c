@@ -2,7 +2,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "esp_timer.h"
 #include "wifi_manager.h"
+
+/* Chống dò PIN 4 số (tối đa 10.000 khả năng): khoá tạm 1 nhân viên sau quá
+ * nhiều lần nhập sai LIÊN TIẾP. Dùng esp_timer_get_time() (đồng hồ đơn điệu
+ * của chip, luôn đúng ngay từ lúc boot) thay vì time()/NTP — tránh phụ
+ * thuộc giờ hệ thống vốn có thể chưa đồng bộ xong lúc máy vừa khởi động. */
+#define LOGIN_MAX_FAIL     5
+#define LOGIN_LOCK_US      (30LL * 1000000LL)   /* khoá 30 giây */
 
 static app_state_t s_state;
 
@@ -116,6 +124,11 @@ void app_state_init(void)
     s_state.wifi_link = LINK_OK;
     s_state.p5_link = LINK_OK;
     s_state.camera_link = LINK_OK;
+    /* Gateway KHÔNG mặc định "đã kết nối" như các mục trên — trước đây
+     * card Gateway hiển thị "Đã tìm thấy thiết bị" CỐ ĐỊNH bất kể trạng
+     * thái thật (hardcode). Mặc định trung thực là LINK_LOST cho tới khi
+     * người dùng bấm "Kết nối" trong Cài đặt (xem gateway_check_cb). */
+    s_state.gateway_link = LINK_LOST;
 
     snprintf(s_state.fw_version, sizeof(s_state.fw_version), "v1.0.0-dev");
     snprintf(s_state.fw_build, sizeof(s_state.fw_build), "build 2026.09.27");
@@ -151,18 +164,44 @@ void app_state_pin_clear(void)
     s_state.pin_input[0] = '\0';
 }
 
+bool app_state_login_is_locked(int *remaining_s)
+{
+    if (s_state.current_employee_idx < 0) return false;
+    int idx = s_state.current_employee_idx;
+    int64_t now = esp_timer_get_time();
+    int64_t until = s_state.login_lock_until_us[idx];
+    if (until <= now) return false;
+    if (remaining_s) *remaining_s = (int)((until - now) / 1000000LL) + 1;
+    return true;
+}
+
 bool app_state_try_login(void)
 {
     if (s_state.current_employee_idx < 0) return false;
-    employee_t *e = &s_state.employees[s_state.current_employee_idx];
+    int idx = s_state.current_employee_idx;
+    employee_t *e = &s_state.employees[idx];
+
+    if (app_state_login_is_locked(NULL)) {
+        app_state_pin_clear();
+        return false;
+    }
+
     if (strcmp(e->pin, s_state.pin_input) == 0) {
         s_state.logged_in = true;
         s_state.current_tab = TAB_ORDERS;
         /* Chỉ Kỹ thuật được cấu hình thiết bị — Nhân viên cân và Quản lý bị
          * chặn hẳn khỏi tab Cài đặt (không có đường vòng qua PIN). */
         s_state.settings_unlocked = (e->role == ROLE_TECHNICIAN);
+        s_state.login_fail_count[idx] = 0;
+        s_state.login_lock_until_us[idx] = 0;
         app_state_pin_clear();
         return true;
+    }
+
+    s_state.login_fail_count[idx]++;
+    if (s_state.login_fail_count[idx] >= LOGIN_MAX_FAIL) {
+        s_state.login_lock_until_us[idx] = esp_timer_get_time() + LOGIN_LOCK_US;
+        s_state.login_fail_count[idx] = 0;
     }
     app_state_pin_clear();
     return false;

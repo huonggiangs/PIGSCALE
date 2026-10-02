@@ -202,6 +202,8 @@ typedef struct {
     bool logged_in;
     int  current_employee_idx;    /* -1 nếu chưa chọn nhân viên trên màn login */
     char pin_input[8];
+    uint8_t login_fail_count[APP_MAX_EMPLOYEES];  /* số lần nhập sai PIN liên tiếp — chống dò PIN */
+    int64_t login_lock_until_us[APP_MAX_EMPLOYEES]; /* esp_timer_get_time() — 0 = không khoá */
 
     /* điều hướng */
     app_tab_t current_tab;
@@ -244,6 +246,7 @@ typedef struct {
     link_state_t wifi_link;
     link_state_t p5_link;
     link_state_t camera_link;
+    link_state_t gateway_link;    /* mặc định LINK_LOST — chỉ true sau khi bấm Kết nối */
 
     int pending_sync_count;       /* số phiếu đang chờ đồng bộ */
 
@@ -262,8 +265,15 @@ void app_state_select_employee(int idx);
 void app_state_pin_digit(char digit);
 void app_state_pin_backspace(void);
 void app_state_pin_clear(void);
-/* Trả về true nếu đăng nhập thành công (PIN đủ 4 số & đúng) */
+/* Trả về true nếu đăng nhập thành công (PIN đủ 4 số & đúng). Tự khoá tạm
+ * (xem app_state_login_is_locked) sau nhiều lần sai liên tiếp — chống dò
+ * PIN 4 số (tối đa 10.000 khả năng, không giới hạn thì phá được rất nhanh). */
 bool app_state_try_login(void);
+
+/** True nếu nhân viên ĐANG CHỌN trên màn login đang bị khoá tạm (quá nhiều
+ *  lần sai liên tiếp). @p remaining_s (tuỳ chọn) trả số giây còn lại. */
+bool app_state_login_is_locked(int *remaining_s);
+
 void app_state_logout(void);
 
 /* ── Đơn hàng ────────────────────────────────────────────────────────────── */

@@ -34,6 +34,17 @@ static void try_auto_login(void)
     app_state_t *st = app_state();
     if (strlen(st->pin_input) < 4) return;
 
+    int remaining_s = 0;
+    if (app_state_login_is_locked(&remaining_s)) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Nhập sai quá nhiều lần — thử lại sau %d giây.", remaining_s);
+        lv_label_set_text(s_error_label, buf);
+        lv_obj_clear_flag(s_error_label, LV_OBJ_FLAG_HIDDEN);
+        app_state_pin_clear();
+        refresh_pin_dots();
+        return;
+    }
+
     if (app_state_try_login()) {
         lv_obj_add_flag(s_error_label, LV_OBJ_FLAG_HIDDEN);
         refresh_pin_dots();
@@ -181,11 +192,9 @@ lv_obj_t *ui_login_create(lv_obj_t *parent)
 
     ui_common_keypad(s_screen, keypad_digit_cb, keypad_backspace_cb, NULL, false);
 
-    lv_obj_t *demo_note = lv_label_create(s_screen);
-    lv_label_set_text(demo_note, "Demo PIN: NV001=1111 · QL001=2222 · KT001=3333");
-    lv_obj_set_style_text_color(demo_note, UI_COLOR_ON_DARK_HINT, 0);
-    lv_obj_set_style_text_font(demo_note, UI_FONT_BODY, 0);
-    lv_obj_set_style_pad_top(demo_note, 16, 0);
+    /* Đã bỏ nhãn "Demo PIN: NV001=1111..." — hiển thị công khai mã PIN thật
+     * (dù là PIN demo) ngay trên màn đăng nhập là lỗ hổng bảo mật, để bất
+     * kỳ ai đứng trước máy cũng tự đăng nhập được mà không cần biết gì. */
 
     refresh_employee_highlight();
     return s_screen;

@@ -389,7 +389,24 @@ static void build_standby_overlay(lv_obj_t *parent)
      * col không có handler riêng (xem gotcha đầy đủ trong ui_login.c). */
     lv_obj_add_flag(col, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-    s_standby_time_label = lv_label_create(col);
+    /* Phóng to gấp đôi (x2) số giờ:phút bằng transform scale quanh tâm —
+     * cùng kỹ thuật ui_standby.c của dự án Mayxucv3 (không có font nào lớn
+     * hơn UI_FONT_DISPLAY đã compile sẵn, scale bitmap tại chỗ rẻ hơn và
+     * đủ nét cho màn chờ nhìn từ xa). Khung kích thước CỐ ĐỊNH để biết
+     * chính xác tâm theo px — bắt buộc cho transform_pivot. */
+    lv_obj_t *clock_box = lv_obj_create(col);
+    lv_obj_remove_style_all(clock_box);
+    lv_obj_set_size(clock_box, 460, 110);
+    lv_obj_set_flex_flow(clock_box, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(clock_box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(clock_box, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(clock_box, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_set_style_transform_pivot_x(clock_box, 230, 0);
+    lv_obj_set_style_transform_pivot_y(clock_box, 55, 0);
+    lv_obj_set_style_transform_scale_x(clock_box, 512, 0);   /* 256 = 1.0x -> 512 = 2.0x */
+    lv_obj_set_style_transform_scale_y(clock_box, 512, 0);
+
+    s_standby_time_label = lv_label_create(clock_box);
     lv_label_set_text(s_standby_time_label, "--:--");
     lv_obj_set_style_text_color(s_standby_time_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(s_standby_time_label, UI_FONT_DISPLAY, 0);

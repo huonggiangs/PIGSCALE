@@ -1,228 +1,140 @@
-# CÂN MÁY XÚC V3 — CLAUDE.md
+# PIG WEIGH — TRẠM CÂN HEO — CLAUDE.md
 
-## Mô tả dự án
-Hệ thống **cân gàu máy xúc** (excavator bucket scale) hiển thị trên màn hình nhúng ESP32-P4.  
-Giao diện dark-theme công nghiệp, ngôn ngữ tiếng Việt.
+> **Lưu ý quan trọng về repo này:** file này mô tả dự án **THẬT ĐANG PHÁT TRIỂN** —
+> nằm trong thư mục **`firmware/`**. Các file khác ở cấp gốc repo (`main/`,
+> `CMakeLists.txt` gốc, `idf_component.yml` gốc, `sdkconfig.defaults` gốc,
+> `partitions.csv` gốc, `preview_screens.html`, `screen01.png`) là **scaffold cũ
+> của một dự án khác** ("CÂN MÁY XÚC V3" — máy xúc, không phải cân heo) để lại từ
+> trước — **CHỈ DÙNG THAM KHẢO**, không phải code đang chạy, không build/nạp từ đó.
+> **Luôn `cd firmware` trước khi chạy `idf.py build/flash`.**
+>
+> Repo chuẩn (canonical): `https://github.com/huonggiangs/canheo.git`
 
 ---
+
+## Mô tả dự án
+
+Hệ thống **cân heo** (pig weighing station) hiển thị trên màn hình nhúng ESP32-P4 10.1".
+Giao diện dark/light-theme công nghiệp, tiếng Việt, vận hành bởi 3 vai trò: **Nhân
+viên cân**, **Quản lý**, **Kỹ thuật**.
 
 ## Hardware Target
 
 | Thành phần | Thông số |
 |---|---|
-| MCU chính (UI + logic) | ESP32-P4 (dual-core Xtensa LX7 @ 400 MHz) |
-| MCU mạng | ESP32-C6 (Wi-Fi 6 / BLE — tích hợp trên mạch) |
-| Board | ESP32-P4-WIFI6-POE-ETH |
-| Display | 800×1280 portrait, MIPI DSI hoặc RGB |
+| Board | **Waveshare ESP32-P4-WIFI6-POE-ETH** |
+| MCU chính | ESP32-P4 (dual-core RISC-V @ 360 MHz), **chip rev v1.3** |
+| MCU mạng | ESP32-C6 qua **SDIO** (esp_hosted + esp_wifi_remote) — P4 không có radio WiFi riêng |
+| Display | JD9365 10.1" 800×1280 MIPI-DSI |
+| Cảm ứng | GT9271/GT911 (I2C, 0x5D) |
+| Ethernet | PoE, LAN8720 (RMII) — hiện báo lỗi "wrong chip OUI", cần kiểm tra lại phần cứng |
 | RAM | 32 MB PSRAM (octal) |
 | Flash | 16 MB |
-| Framework | **ESP-IDF v5.4+** |
-| UI Library | **LVGL v9.x** |
+| Framework | **ESP-IDF v5.5.5** |
+| UI Library | **LVGL v9.2.x** |
 
-### Cảm biến & Ngoại vi
-
-| Module | Giao tiếp | Ghi chú |
-|---|---|---|
-| Cảm biến áp suất (×6 GẦU, ×2 LẬT) | ADC — GPIO34/35/36/39... | 0–5 V → voltage divider → 12-bit ADC |
-| Cảm biến góc nghiêng (IMU) | I²C — địa chỉ cấu hình sẵn | VD: MPU-6050 @ 0x68, BNO055 @ 0x28 |
-| USB Mass Storage (xuất báo cáo) | USB OTG FS — GPIO19/20 | ESP32-P4 hỗ trợ USB MSC host |
-| Ethernet (PoE) | RMII — PHY IP101 | `esp_eth_mac_new_esp32` |
+**Mọi gotcha/cạm bẫy phần cứng cụ thể của board này (đã xác nhận qua thực tế bring-up,
+không phải lý thuyết) nằm trong [`docs/ESP32P4_HARDWARE_BRINGUP.md`](docs/ESP32P4_HARDWARE_BRINGUP.md)
+— ĐỌC TRƯỚC khi đụng vào display/touch/WiFi/bộ nhớ/múi giờ.**
 
 ---
 
-## Mục tiêu tích hợp phần cứng
-
-### 1. Đọc ADC — Cảm biến áp suất
-```c
-// main/sensor/pressure_sensor.c
-// - Đọc ADC đa kênh (ADC1_CHANNEL_x) bằng esp_adc
-// - Lọc nhiễu: trung bình 16 mẫu (rolling average)
-// - Chuyển đổi: raw ADC → điện áp → bar (dùng hệ số calibration)
-// - Ghi nhận: lưu vào ring buffer, cập nhật LVGL label mỗi 100ms
-// - Cấu trúc: pressure_reading_t { channel, raw, voltage, bar, timestamp }
-```
-
-### 2. Kết nối Wi-Fi qua ESP32-C6
-```c
-// main/network/wifi_manager.c  (đã có khung — cần hoàn thiện)
-// - Dùng esp_wifi API, event loop FreeRTOS
-// - Lưu SSID/password trong NVS
-// - Auto-reconnect với exponential backoff
-// - Báo trạng thái lên UI qua event queue: WIFI_CONNECTED / WIFI_DISCONNECTED
-// - ESP32-C6 giao tiếp với P4 qua UART hoặc SPI (bridge)
-```
-
-### 3. Kết nối cảm biến góc (I²C)
-```c
-// main/sensor/angle_sensor.c
-// - I²C master init: i2c_master_bus_create()
-// - Địa chỉ cấu hình qua sdkconfig: CONFIG_ANGLE_SENSOR_ADDR (default 0x68)
-// - Đọc pitch/roll từ register — cập nhật mỗi 50ms
-// - Cấu trúc: angle_reading_t { pitch_deg, roll_deg, timestamp }
-```
-
-### 4. USB MSC — Xuất báo cáo vào USB
-```c
-// main/usb/usb_storage.c
-// - Dùng esp_tinyusb + tinyusb MSC host (USB OTG FS)
-// - Phát hiện cắm USB → mount FAT filesystem (FATFS)
-// - Liệt kê thư mục gốc → UI hiển thị danh sách thư mục để chọn
-// - Ghi file: report_YYYYMMDD_HHMMSS.csv vào thư mục đã chọn
-// - Format CSV: timestamp, order_id, company, material, weight_kg, target_kg
-```
-
----
-
-## Design System
-
-### Màu sắc
-```c
-#define COLOR_BG          0x1A1A1A   // nền chính
-#define COLOR_CARD        0x242424   // nền card/panel
-#define COLOR_ACCENT      0xF5C800   // vàng chủ đạo
-#define COLOR_TEXT_PRI    0xFFFFFF   // chữ trắng chính
-#define COLOR_TEXT_SEC    0x888888   // chữ xám phụ
-#define COLOR_BORDER      0x333333   // border/divider
-#define COLOR_OK          0x22C55E   // xanh lá (OK / SẴN SÀNG)
-#define COLOR_WARN        0xEAB308   // vàng cảnh báo
-#define COLOR_ERR         0xEF4444   // đỏ lỗi
-```
-
-### Font (LVGL)
-- Display lớn: `lv_font_montserrat_48` hoặc `font_gilroy_80.c` (custom compile)
-- Header: 20px bold uppercase
-- Label: 12–14px uppercase, letter-spacing
-- Cần compile font với Unicode Vietnamese Extended (ắ, ổ, ử…) bằng `lv_font_conv`
-
-### Layout (800×1280 portrait)
-```
-┌─────────────────────────────┐  h=96   Header (giờ, tiêu đề, icons)
-├─────────────────────────────┤  ~130   Order Card (compact)
-├─────────────────────────────┤  ~490   Weight Display (số lớn + progress)
-├─────────────────────────────┤  ~192   Stats Row (tổng / mục tiêu)
-├─────────────────────────────┤  ~100   CTA Button "BẮT ĐẦU CÂN"
-└─────────────────────────────┘  h=128  Bottom Navigation (5 tabs)
-```
-
----
-
-## Cấu trúc thư mục (đầy đủ)
+## Cấu trúc thư mục (`firmware/`)
 
 ```
-V3/
-├── CLAUDE.md
-├── CMakeLists.txt
-├── sdkconfig.defaults
-├── partitions.csv             ← ota_0, ota_1, nvs, storage(FAT)
+firmware/
 ├── main/
-│   ├── CMakeLists.txt
-│   ├── main.c                 ← app_main: init display, sensors, network, USB, LVGL tasks
-│   │
-│   ├── display/
-│   │   ├── display_driver.c   ← init MIPI/RGB panel, LVGL flush callback
-│   │   └── display_driver.h
-│   │
-│   ├── ui/
-│   │   ├── ui_theme.h         ← màu, font, lv_style_t constants
-│   │   ├── ui_main.c/h        ← CÂN (state machine IDLE→WEIGHING→COMPLETE)
-│   │   ├── ui_orders.c/h      ← ĐƠN HÀNG (danh sách, tạo mới)
-│   │   ├── ui_history.c/h     ← LỊCH SỬ
-│   │   ├── ui_report.c/h      ← BÁO CÁO (chart, USB export modal)
-│   │   ├── ui_settings.c/h    ← CÀI ĐẶT (menu + PIN gate)
-│   │   ├── ui_calibration.c/h ← HIỆU CHUẨN (PIN, machine tabs, sensor matrix)
-│   │   ├── ui_config.c/h      ← THIẾT LẬP THIẾT BỊ (brightness, volume, time, timezone)
-│   │   ├── ui_network.c/h     ← CÀI ĐẶT MẠNG (WiFi, 4G, cloud sync)
-│   │   ├── ui_about.c/h       ← THÔNG TIN
-│   │   └── ui_nav.c/h         ← bottom navigation bar (5 tabs, SVG icons)
-│   │
-│   ├── sensor/
-│   │   ├── pressure_sensor.c/h  ← ADC đọc 6 kênh áp suất, rolling avg, bar conversion
-│   │   ├── angle_sensor.c/h     ← I²C góc nghiêng (pitch/roll), địa chỉ cấu hình NVS
-│   │   └── sensor_hub.c/h       ← tổng hợp readings, cung cấp cho weighing logic
-│   │
-│   ├── weighing/
-│   │   ├── weight_logic.c/h   ← state machine cân, tính khối lượng từ áp suất
-│   │   └── weight_record.c/h  ← lưu lịch sử vào NVS / FATFS
-│   │
+│   ├── main.c                  ← app_main: NVS → netif → display → touch → eth → wifi → UI
+│   ├── board_config.h          ← toàn bộ chân GPIO/địa chỉ I2C/tốc độ DSI
+│   ├── display/display_driver.c/h
+│   ├── touch/gt9271.c/h
 │   ├── network/
-│   │   ├── wifi_manager.c/h   ← ESP32-C6 bridge, scan/connect, NVS credentials
-│   │   ├── eth_manager.c/h    ← Ethernet PoE (PHY IP101)
-│   │   └── cloud_sync.c/h     ← REST API upload (HTTPS, TLS 1.3)
-│   │
-│   └── usb/
-│       ├── usb_storage.c/h    ← TinyUSB MSC host, FAT mount, file write
-│       └── report_export.c/h  ← tạo CSV/report từ weight_record, ghi vào USB path
-│
-├── components/
-│   └── lvgl/                  ← LVGL v9.x (git submodule)
-└── managed_components/        ← idf-component-manager cache
+│   │   ├── wifi_manager.c/h    ← WiFi STA qua ESP32-C6/SDIO — THẬT (không demo)
+│   │   └── eth_manager.c/h     ← Ethernet PoE (LAN8720) — đang lỗi, xem bảng trên
+│   └── ui/
+│       ├── app_state.c/h       ← state ứng dụng — ranh giới UI/dữ liệu, nhiều phần
+│       │                          còn là MÔ PHỎNG (demo), xem mục "Demo vs Thật" dưới
+│       ├── ui_shell.c/h        ← khung chính: header/sub-bar/bottom-nav/tab switch,
+│       │                          màn chờ (standby) khi rảnh ở tab Cài đặt
+│       ├── ui_login.c/h        ← đăng nhập PIN (chọn nhân viên → nhập PIN)
+│       ├── ui_orders.c/h       ← ĐƠN HÀNG
+│       ├── ui_weighing.c/h     ← CÂN
+│       ├── ui_alerts.c/h       ← ĐỀ XUẤT/cảnh báo
+│       ├── ui_history.c/h      ← LỊCH SỬ
+│       ├── ui_settings.c/h     ← CÀI ĐẶT (chỉ Kỹ thuật được vào — xem mục Bảo mật)
+│       ├── ui_common.c/h       ← widget dùng chung (card, badge, keypad, pin dots...)
+│       ├── ui_theme.h          ← màu/font/kích thước — không hardcode màu inline nơi khác
+│       └── fonts/, icons/      ← font Inter compile riêng (có dấu tiếng Việt) + SVG icon
 ```
 
 ---
 
-## Màn hình CÂN — State Machine
+## Vai trò & quyền truy cập
 
-```
-IDLE ──[BẮT ĐẦU CÂN]──► WEIGHING ──[đủ target]──► COMPLETE
-  ▲                          │                          │
-  └────────[RESET]───────────┘◄──────────[RESET]───────┘
-```
+| Vai trò | Mã demo | PIN demo | Quyền |
+|---|---|---|---|
+| Nhân viên cân | NV001 | — | Đơn hàng, Cân, Lịch sử — **không vào được Cài đặt** |
+| Quản lý | QL001 | — | Như trên — **không vào được Cài đặt** |
+| Kỹ thuật | KT001 | — | Toàn quyền, **duy nhất vai trò được cấu hình thiết bị** |
 
-| State | Mô tả |
+> PIN đang hardcode trong `app_state.c` (demo) và có khoá tạm 30 giây sau 5 lần
+> nhập sai liên tiếp (`app_state_login_is_locked`). **Trước khi triển khai thật phải
+> thay bằng cơ chế quản lý tài khoản thật** — xem mục Bảo mật.
+
+---
+
+## Demo vs Thật — ranh giới cần biết trước khi "nghiệm thu"
+
+| Khối chức năng | Trạng thái |
 |---|---|
-| `IDLE` | Hiển thị 0, progress 0%, nút "BẮT ĐẦU CÂN" |
-| `WEIGHING` | Đọc sensor_hub realtime → cập nhật LVGL mỗi 100ms |
-| `COMPLETE` | Nhấp nháy "HOÀN THÀNH", gọi weight_record_save(), nút "RESET" |
+| WiFi (kết nối, lưu NVS, quét mạng) | **THẬT** — qua ESP32-C6/SDIO |
+| Đồng bộ giờ (NTP, múi giờ GMT+7) | **THẬT** — xem `wifi_manager.c`, `main.c` |
+| Hiển thị, cảm ứng | **THẬT** |
+| Gateway (kết nối, token) | **Demo** — ô nhập thật, nhưng "Kết nối" chỉ mô phỏng |
+| Camera (tìm kiếm, tài khoản) | **Demo** — danh sách tìm được là mô phỏng |
+| P5 Scale (tìm kiếm, kết nối) | **Demo** — chưa có giao thức Modbus-TCP thật |
+| Máy in, lịch sử cân, đơn hàng | **Mô phỏng dữ liệu** (không có backend/server thật) |
+| Bảo mật (Secure Boot/Flash/NVS Encryption) | **TẮT** — xem mục Bảo mật |
+
+Khi thêm backend thật cho bất kỳ khối "Demo" nào, chỉ sửa bên trong file tương ứng —
+các hàm `app_state_*` là ranh giới ổn định mà UI gọi vào, không cần đổi UI.
 
 ---
 
-## LVGL Task Setup (FreeRTOS)
+## Bảo mật — các việc BẮT BUỘC trước khi triển khai thật
 
-```c
-#define LVGL_TICK_PERIOD_MS  2
-#define LVGL_TASK_STACK_KB   8
-#define LVGL_TASK_PRIORITY   5
-
-// lvgl_tick_task:    lv_tick_inc(2) mỗi 2ms (timer ISR hoặc FreeRTOS task)
-// lvgl_handler_task: lv_timer_handler() trong loop, bảo vệ bằng mutex
-// sensor_task:       đọc ADC + I²C mỗi 50ms, gửi vào sensor_hub queue
-// network_task:      WiFi events + cloud sync mỗi 60s
-// usb_task:          TinyUSB device task (nếu dùng USB MSC host thì là host task)
-```
+1. **PIN hardcode trong mã nguồn** (`app_state.c`) — thay bằng cơ chế tài khoản thật
+   (nhập/đổi PIN qua Kỹ thuật, lưu không phải plaintext trong mã nguồn).
+2. **Secure Boot / Flash Encryption / NVS Encryption đang TẮT** (`sdkconfig`) →
+   mật khẩu WiFi, token Gateway, mật khẩu camera đang lưu **plaintext trên flash**.
+   Bật các cơ chế này cần **burn eFuse — KHÔNG THỂ ĐẢO NGƯỢC** và sẽ đổi hẳn quy
+   trình nạp firmware (phải ký + mã hoá mỗi lần build) — **chỉ bật khi đã chốt
+   thiết kế phần cứng/firmware, không bật khi còn đang phát triển lặp lại
+   thường xuyên**, và cần xác nhận rõ ràng trước khi thực hiện trên thiết bị thật.
+3. Ethernet PoE báo lỗi phần cứng (`wrong chip OUI`) — cần xác minh lại PHY/board
+   trước khi coi mạng dây là kênh dự phòng đáng tin cậy.
 
 ---
 
-## Workflow phát triển
+## Quy trình build & nạp
 
-```
-Plan → Code → Verify → Deploy
-```
-
-1. **Plan** — Đọc CLAUDE.md, xác định module cần làm, kiểm tra spec hardware
-2. **Code** — Mỗi UI screen = 1 file, style từ `ui_theme.h`, không hardcode màu inline
-3. **Verify** — `idf.py build && idf.py size` (kiểm tra RAM/Flash)
-4. **Deploy** — `idf.py -p COMx flash monitor` hoặc OTA qua Ethernet
-
-```bash
-# Build & flash
-cd E:\Project\Candientu\mayxuc\V3
-idf.py set-target esp32p4
+```powershell
+cd firmware
+. C:\Espressif\frameworks\esp-idf-v5.5.5\export.ps1
+idf.py set-target esp32p4      # chỉ 1 lần
 idf.py build
-idf.py -p COM3 flash monitor
-
-# OTA
-idf.py build && python ota_upload.py --host 192.168.1.x
+idf.py -p COM6 -b 921600 flash
 ```
+
+Xác minh sau mỗi lần nạp bằng log serial (115200 baud): tìm chuỗi hoàn tất boot
+(`[7/7] ... OK`, `KHỞI ĐỘNG HOÀN TẤT`) và **không** có `Guru Meditation`/`assert failed`.
 
 ---
 
-## Lưu ý quan trọng
+## Quy ước code
 
-1. **Vietnamese font** — compile bằng `lv_font_conv` với Unicode range 0x0000–0x024F (Latin Extended).
-2. **PSRAM** — `CONFIG_SPIRAM=y`, LVGL frame buffer đặt trong PSRAM.
-3. **Thread safety** — mọi `lv_*` call phải bọc trong `lvgl_port_lock()` / `lvgl_port_unlock()`.
-4. **ADC accuracy** — dùng `adc_cali_scheme_line_fitting` để bù nhiệt độ và điện áp.
-5. **I²C angle sensor** — địa chỉ lưu trong NVS key `"angle_addr"`, default `0x68` (MPU-6050).
-6. **USB MSC host** — cần `CONFIG_TINYUSB_MSC_ENABLED=y` và partition FAT `storage` trong `partitions.csv`.
-7. **ESP32-C6 bridge** — P4 giao tiếp C6 qua UART2 (AT commands hoặc custom protocol); C6 xử lý Wi-Fi stack.
-8. **PoE ETH** — driver `esp_eth_mac_new_esp32` + PHY `esp_eth_phy_new_ip101`.
+- Mỗi UI screen = 1 file (`ui_xxx.c/h`), style lấy từ `ui_theme.h`, không hardcode màu/font inline.
+- `lv_obj_create()` mặc định BẬT `LV_OBJ_FLAG_CLICKABLE` và KHÔNG tự có flex layout —
+  xem mục 8 trong `docs/ESP32P4_HARDWARE_BRINGUP.md` trước khi dựng container mới.
+- Mọi commit message bằng **tiếng Việt có dấu**.
+- Workflow: `Plan → Code → Verify (idf.py build, nạp thật, đọc log serial) → Commit → Push`.

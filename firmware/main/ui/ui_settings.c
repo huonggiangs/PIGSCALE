@@ -19,6 +19,13 @@ static bool s_wifi_show_all;   /* true = hiện đủ danh sách; false = thu g�
 /* ── Gateway: tìm camera trong mạng ──────────────────────────────────────── */
 static lv_obj_t *s_cam_ip_ta;      /* ô "Địa chỉ IP camera" — Chọn từ danh sách tìm được sẽ điền vào đây */
 static lv_obj_t *s_cam_list_host;  /* danh sách camera tìm được — ẩn cho tới khi bấm Tìm kiếm */
+static lv_obj_t *s_gw_ip_ta, *s_gw_port_ta;        /* Gateway: IP/Cổng do người dùng nhập — không hardcode */
+static lv_obj_t *s_gw_status_dot, *s_gw_status_label;  /* cập nhật tại chỗ sau khi bấm Kết nối */
+
+/* ── P5 Scale: tìm đúng thiết bị trong mạng ───────────────────────────────── */
+static lv_obj_t *s_p5_ip_ta, *s_p5_port_ta;
+static lv_obj_t *s_p5_list_host;
+static lv_obj_t *s_p5_status_dot, *s_p5_status_label;
 
 /* ── xem trước phiếu in ──────────────────────────────────────────────────── */
 static lv_obj_t *s_print_preview;
@@ -267,6 +274,14 @@ static void build_wifi_section(lv_obj_t *host)
 static void gateway_check_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
+    /* Cập nhật TẠI CHỖ (không ui_settings_refresh) để không mất IP/Token/
+     * tài khoản camera đang gõ dở. Chưa có giao thức bắt tay Gateway thật
+     * trong app_state.h — coi "bấm Kết nối" là hành động người dùng xác
+     * nhận đã cấu hình đúng, không còn hiển thị "Đã tìm thấy thiết bị"
+     * CỐ ĐỊNH bất kể có bấm hay chưa (hardcode cũ). */
+    app_state()->gateway_link = LINK_OK;
+    if (s_gw_status_dot) lv_obj_set_style_bg_color(s_gw_status_dot, ui_common_link_color(LINK_OK), 0);
+    if (s_gw_status_label) lv_label_set_text(s_gw_status_label, "Đã kết nối");
     ui_shell_toast("Đang kết nối Gateway/Camera... (demo)");
 }
 
@@ -346,9 +361,7 @@ static void build_gateway_section(lv_obj_t *host)
 
     make_section_title(card, "GATEWAY");
 
-    /* Gateway chưa có link_state_t riêng trong app_state.h (chỉ Wi-Fi/P5/Camera
-     * có) — mô phỏng ở trạng thái đã tìm thấy thiết bị, khớp mặc định demo
-     * (mọi liên kết = LINK_OK trong app_state_init()). */
+    app_state_t *gst = app_state();
     lv_obj_t *status_row = lv_obj_create(card);
     lv_obj_remove_style_all(status_row);
     lv_obj_set_flex_flow(status_row, LV_FLEX_FLOW_ROW);
@@ -356,10 +369,32 @@ static void build_gateway_section(lv_obj_t *host)
     lv_obj_set_style_pad_column(status_row, 6, 0);
     lv_obj_set_size(status_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(status_row, LV_OBJ_FLAG_SCROLLABLE);
-    ui_common_status_dot(status_row, LINK_OK);
-    make_field_label(status_row, "Đã tìm thấy thiết bị");
+    s_gw_status_dot = ui_common_status_dot(status_row, gst->gateway_link);
+    s_gw_status_label = make_field_label(status_row, gst->gateway_link == LINK_OK ? "Đã kết nối" : "Chưa kết nối");
 
-    make_field_label(card, "Địa chỉ IP: 192.168.1.10 · Cổng: 8080");
+    /* Địa chỉ IP/Cổng Gateway — trước đây là nhãn tĩnh "192.168.1.10:8080"
+     * hiện cố định bất kể cấu hình thật (hardcode). Giờ là 2 ô nhập thật. */
+    lv_obj_t *gw_addr_row = lv_obj_create(card);
+    lv_obj_remove_style_all(gw_addr_row);
+    lv_obj_set_flex_flow(gw_addr_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(gw_addr_row, 8, 0);
+    lv_obj_set_width(gw_addr_row, LV_PCT(100));
+    lv_obj_set_height(gw_addr_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(gw_addr_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *gw_ip_col = lv_obj_create(gw_addr_row);
+    lv_obj_remove_style_all(gw_ip_col);
+    lv_obj_set_flex_flow(gw_ip_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(gw_ip_col, 2);
+    lv_obj_clear_flag(gw_ip_col, LV_OBJ_FLAG_SCROLLABLE);
+    make_field_label(gw_ip_col, "Địa chỉ IP");
+    s_gw_ip_ta = make_text_field(gw_ip_col, "Nhập IP Gateway...");
+    lv_obj_t *gw_port_col = lv_obj_create(gw_addr_row);
+    lv_obj_remove_style_all(gw_port_col);
+    lv_obj_set_flex_flow(gw_port_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(gw_port_col, 1);
+    lv_obj_clear_flag(gw_port_col, LV_OBJ_FLAG_SCROLLABLE);
+    make_field_label(gw_port_col, "Cổng");
+    s_gw_port_ta = make_text_field(gw_port_col, "8080");
 
     make_field_label(card, "Token truy cập");
     make_text_field(card, "Nhập token...");
@@ -420,17 +455,68 @@ static void build_gateway_section(lv_obj_t *host)
 /* ────────────────────────────────────────────────────────────────────────
  * P5 SCALE (mục 4.10)
  * ──────────────────────────────────────────────────────────────────────── */
+/* "Tìm chính xác sản phẩm": khác với tìm camera (nhiều kết quả để chọn),
+ * P5 Scale là MỘT thiết bị đo lường cụ thể giao tiếp Modbus-TCP (cổng mặc
+ * định 502) — quét mạng phải xác định đúng DUY NHẤT thiết bị đó qua tên
+ * sản phẩm/model, không phải danh sách chung chung. Chưa có giao thức
+ * quét thật (chưa rõ cách P5 Scale tự công bố trên mạng — mDNS/broadcast
+ * riêng của hãng) nên hiện kết quả mô phỏng NHƯNG đã gắn đúng tên sản
+ * phẩm/model để phân biệt với "tìm thấy thiết bị" chung chung như trước. */
+typedef struct { const char *product; const char *ip; } demo_p5_t;
+static const demo_p5_t k_demo_p5 = { "P5 Scale Indicator — Modbus TCP", "192.168.1.20" };
+
+static void p5_pick_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    if (s_p5_ip_ta) lv_textarea_set_text(s_p5_ip_ta, k_demo_p5.ip);
+    if (s_p5_port_ta) lv_textarea_set_text(s_p5_port_ta, "502");
+    ui_shell_toast("Đã chọn đúng sản phẩm — kiểm tra tài khoản rồi bấm Kết nối");
+}
+
 static void p5_rescan_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
-    /* Không có app_state_p5_scan() trong app_state.h — chỉ phản hồi hình
-     * thức (toast), giống cách app_state_wifi_scan() cũng không đổi dữ liệu. */
-    ui_shell_toast("Đang quét lại P5 Scale... (demo)");
+    if (!s_p5_list_host) return;
+    ui_shell_toast("Đang tìm P5 Scale trong mạng... (demo)");
+
+    /* Cập nhật TẠI CHỖ — không ui_settings_refresh() để không mất Tài
+     * khoản/Mật khẩu đang gõ dở (cùng cách cam_search_cb đang làm). */
+    ui_common_clear(s_p5_list_host);
+    lv_obj_t *row = lv_obj_create(s_p5_list_host);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_ver(row, 4, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *info = lv_obj_create(row);
+    lv_obj_remove_style_all(info);
+    lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_size(info, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(info, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *name = lv_label_create(info);
+    lv_label_set_text(name, k_demo_p5.product);
+    lv_obj_set_style_text_font(name, UI_FONT_BODY_BOLD, 0);
+    lv_obj_set_style_text_color(name, UI_COLOR_HEADING, 0);
+    lv_obj_t *ip = lv_label_create(info);
+    lv_label_set_text(ip, k_demo_p5.ip);
+    lv_obj_set_style_text_font(ip, UI_FONT_XS, 0);
+    lv_obj_set_style_text_color(ip, UI_COLOR_BODY, 0);
+
+    lv_obj_t *pick_btn = ui_common_button_outline(row, "Chọn", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_add_event_cb(pick_btn, p5_pick_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_clear_flag(s_p5_list_host, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void p5_connect_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
+    app_state()->p5_link = LINK_OK;
+    if (s_p5_status_dot) lv_obj_set_style_bg_color(s_p5_status_dot, ui_common_link_color(LINK_OK), 0);
+    if (s_p5_status_label) lv_label_set_text(s_p5_status_label, "Đã tìm thấy thiết bị");
     ui_shell_toast("Đang kết nối P5 Scale... (demo)");
 }
 
@@ -450,10 +536,46 @@ static void build_p5_section(lv_obj_t *host)
     lv_obj_set_style_pad_column(status_row, 6, 0);
     lv_obj_set_size(status_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_clear_flag(status_row, LV_OBJ_FLAG_SCROLLABLE);
-    ui_common_status_dot(status_row, st->p5_link);
-    make_field_label(status_row, st->p5_link == LINK_LOST ? "Không tìm thấy thiết bị" : "Đã tìm thấy thiết bị");
+    s_p5_status_dot = ui_common_status_dot(status_row, st->p5_link);
+    s_p5_status_label = make_field_label(status_row, st->p5_link == LINK_LOST ? "Không tìm thấy thiết bị" : "Đã tìm thấy thiết bị");
 
-    make_field_label(card, "Địa chỉ IP: 192.168.1.20 · Cổng: 502");
+    /* Tìm đúng sản phẩm P5 Scale trong mạng */
+    make_field_label(card, "Tìm P5 Scale trong mạng");
+    lv_obj_t *search_btn = ui_common_button(card, "Tìm kiếm", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_set_width(search_btn, LV_PCT(100));
+    lv_obj_add_event_cb(search_btn, p5_rescan_cb, LV_EVENT_CLICKED, NULL);
+
+    s_p5_list_host = lv_obj_create(card);
+    lv_obj_remove_style_all(s_p5_list_host);
+    lv_obj_set_flex_flow(s_p5_list_host, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_width(s_p5_list_host, LV_PCT(100));
+    lv_obj_set_height(s_p5_list_host, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(s_p5_list_host, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_p5_list_host, LV_OBJ_FLAG_HIDDEN);
+
+    /* Địa chỉ IP/Cổng — trước đây là nhãn tĩnh "192.168.1.20:502" cố định
+     * (hardcode), giờ là 2 ô nhập thật, điền tự động khi "Chọn" ở trên. */
+    lv_obj_t *p5_addr_row = lv_obj_create(card);
+    lv_obj_remove_style_all(p5_addr_row);
+    lv_obj_set_flex_flow(p5_addr_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(p5_addr_row, 8, 0);
+    lv_obj_set_width(p5_addr_row, LV_PCT(100));
+    lv_obj_set_height(p5_addr_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(p5_addr_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *p5_ip_col = lv_obj_create(p5_addr_row);
+    lv_obj_remove_style_all(p5_ip_col);
+    lv_obj_set_flex_flow(p5_ip_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(p5_ip_col, 2);
+    lv_obj_clear_flag(p5_ip_col, LV_OBJ_FLAG_SCROLLABLE);
+    make_field_label(p5_ip_col, "Địa chỉ IP");
+    s_p5_ip_ta = make_text_field(p5_ip_col, "Chọn thiết bị ở trên hoặc nhập tay...");
+    lv_obj_t *p5_port_col = lv_obj_create(p5_addr_row);
+    lv_obj_remove_style_all(p5_port_col);
+    lv_obj_set_flex_flow(p5_port_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(p5_port_col, 1);
+    lv_obj_clear_flag(p5_port_col, LV_OBJ_FLAG_SCROLLABLE);
+    make_field_label(p5_port_col, "Cổng");
+    s_p5_port_ta = make_text_field(p5_port_col, "502");
 
     make_field_label(card, "Tài khoản");
     make_text_field(card, "Tài khoản P5 Scale...");
@@ -461,18 +583,8 @@ static void build_p5_section(lv_obj_t *host)
     make_field_label(card, "Mật khẩu");
     make_password_row(card, "Mật khẩu P5 Scale...");
 
-    lv_obj_t *btn_row = lv_obj_create(card);
-    lv_obj_remove_style_all(btn_row);
-    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(btn_row, 10, 0);
-    lv_obj_set_width(btn_row, LV_PCT(100));
-    lv_obj_set_height(btn_row, LV_SIZE_CONTENT);
-    lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *rescan_btn = ui_common_button_outline(btn_row, "Quét lại", UI_COLOR_BORDER, UI_COLOR_BODY, UI_FONT_BODY_BOLD);
-    lv_obj_set_flex_grow(rescan_btn, 1);
-    lv_obj_add_event_cb(rescan_btn, p5_rescan_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *connect_btn = ui_common_button(btn_row, "Kết nối", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
-    lv_obj_set_flex_grow(connect_btn, 1);
+    lv_obj_t *connect_btn = ui_common_button(card, "Kết nối", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_set_width(connect_btn, LV_PCT(100));
     lv_obj_add_event_cb(connect_btn, p5_connect_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -779,6 +891,15 @@ void ui_settings_refresh(void)
     s_time_sync_label = NULL;
     s_cam_ip_ta = NULL;
     s_cam_list_host = NULL;
+    s_gw_ip_ta = NULL;
+    s_gw_port_ta = NULL;
+    s_gw_status_dot = NULL;
+    s_gw_status_label = NULL;
+    s_p5_ip_ta = NULL;
+    s_p5_port_ta = NULL;
+    s_p5_list_host = NULL;
+    s_p5_status_dot = NULL;
+    s_p5_status_label = NULL;
 
     app_state_t *st = app_state();
     employee_t *e = (st->current_employee_idx >= 0) ? &st->employees[st->current_employee_idx] : NULL;
