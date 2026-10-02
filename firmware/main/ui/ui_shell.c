@@ -11,6 +11,7 @@
 #include "ui_station_modal.h"
 #include "ui_help.h"
 #include <stdio.h>
+#include <time.h>
 
 /* ── Trạng thái nội bộ của shell ─────────────────────────────────────────── */
 static lv_obj_t *s_login_screen;
@@ -39,14 +40,25 @@ static lv_obj_t *s_station_name_label;
 static const char *NAV_LABELS[TAB_COUNT] = {"Đơn hàng", "Cân", "Đề xuất", "Lịch sử", "Cài đặt"};
 static const void *NAV_ICONS[TAB_COUNT];
 
-/* demo clock — chưa nối RTC/NTP thật, chỉ minh hoạ "cập nhật mỗi 30 giây" */
-static int s_demo_hour = 9, s_demo_min = 14;
+/* Màn chờ (screensaver) — tự hiện khi không chạm màn hình quá
+ * SETTINGS_IDLE_MS trong lúc đang ở tab Cài đặt (xem tick_timer_cb). Chỉ áp
+ * dụng cho tab Cài đặt: đây là màn cấu hình/quản trị, đứng yên lâu không
+ * thao tác thường là do nhân viên rời đi — tự thoát về Đơn hàng vừa tránh
+ * lộ màn hình cấu hình, vừa khiến PIN Cài đặt (operator) phải nhập lại ở
+ * lần vào sau (logic khoá PIN có sẵn trong ui_shell_switch_tab). Không áp
+ * dụng cho tab Cân vì đang đo/cân thật sự cần luôn thấy số liệu trên màn. */
+#define SETTINGS_IDLE_MS   120000   /* 2 phút */
+static lv_obj_t *s_standby_overlay;
+static lv_obj_t *s_standby_time_label;
+static lv_obj_t *s_standby_date_label;
 
 static void tick_timer_cb(lv_timer_t *t);
 static void nav_btn_event_cb(lv_event_t *e);
 static void logout_btn_event_cb(lv_event_t *e);
 static void station_btn_event_cb(lv_event_t *e);
 static void sync_badge_event_cb(lv_event_t *e);
+static void standby_enter(void);
+static void standby_dismiss(void);
 
 /* ────────────────────────────────────────────────────────────────────────
  * THANH TRẠNG THÁI (mục 4.2)
@@ -325,6 +337,96 @@ static void sync_badge_event_cb(lv_event_t *e)
 }
 
 /* ────────────────────────────────────────────────────────────────────────
+ * MÀN CHỜ (screensaver) — xem ghi chú SETTINGS_IDLE_MS phía trên
+ * ──────────────────────────────────────────────────────────────────────── */
+static void standby_update_clock(void)
+{
+    time_t now = time(NULL);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    static const char *k_wd[7] = {"Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"};
+
+    char tbuf[8];
+    snprintf(tbuf, sizeof(tbuf), "%02d:%02d", tmv.tm_hour, tmv.tm_min);
+    lv_label_set_text(s_standby_time_label, tbuf);
+
+    char dbuf[48];
+    snprintf(dbuf, sizeof(dbuf), "%s, %02d/%02d/%04d",
+             k_wd[tmv.tm_wday], tmv.tm_mday, tmv.tm_mon + 1, tmv.tm_year + 1900);
+    lv_label_set_text(s_standby_date_label, dbuf);
+}
+
+static void standby_overlay_click_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    standby_dismiss();
+}
+
+static void build_standby_overlay(lv_obj_t *parent)
+{
+    s_standby_overlay = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_standby_overlay);
+    lv_obj_set_size(s_standby_overlay, UI_HOR_RES, UI_VER_RES);
+    lv_obj_set_pos(s_standby_overlay, 0, 0);
+    lv_obj_set_style_bg_color(s_standby_overlay, UI_COLOR_HEADING, 0);
+    lv_obj_set_style_bg_opa(s_standby_overlay, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(s_standby_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_standby_overlay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_standby_overlay, standby_overlay_click_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *col = lv_obj_create(s_standby_overlay);
+    lv_obj_remove_style_all(col);
+    lv_obj_set_size(col, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_center(col);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(col, 12, 0);
+    lv_obj_clear_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+    /* lv_obj_create() mặc định BẬT CLICKABLE, nằm đè lên overlay — phải bật
+     * EVENT_BUBBLE để chạm vào "col" (và các label con) vẫn nổi bọt lên
+     * overlay's click handler, KHÔNG dùng remove_flag(CLICKABLE) ở đây vì
+     * col không có handler riêng (xem gotcha đầy đủ trong ui_login.c). */
+    lv_obj_add_flag(col, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+    s_standby_time_label = lv_label_create(col);
+    lv_label_set_text(s_standby_time_label, "--:--");
+    lv_obj_set_style_text_color(s_standby_time_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(s_standby_time_label, UI_FONT_DISPLAY, 0);
+    lv_obj_add_flag(s_standby_time_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+    s_standby_date_label = lv_label_create(col);
+    lv_label_set_text(s_standby_date_label, "--");
+    lv_obj_set_style_text_color(s_standby_date_label, UI_COLOR_ON_DARK_MUTED, 0);
+    lv_obj_set_style_text_font(s_standby_date_label, UI_FONT_H3, 0);
+    lv_obj_add_flag(s_standby_date_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+    lv_obj_t *hint = lv_label_create(col);
+    lv_label_set_text(hint, "Chạm màn hình để quay lại");
+    lv_obj_set_style_text_color(hint, UI_COLOR_ON_DARK_HINT, 0);
+    lv_obj_set_style_text_font(hint, UI_FONT_BODY, 0);
+    lv_obj_add_flag(hint, LV_OBJ_FLAG_EVENT_BUBBLE);
+}
+
+static void standby_enter(void)
+{
+    if (!s_standby_overlay) return;
+    standby_update_clock();
+    lv_obj_clear_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(s_standby_overlay);
+}
+
+static void standby_dismiss(void)
+{
+    if (!s_standby_overlay || lv_obj_has_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN)) return;
+    lv_obj_add_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN);
+    /* Tab Cài đặt "không có tác động" (chưa lưu gì) nên về thẳng Đơn hàng là
+     * an toàn; PIN Cài đặt (operator) tự khoá lại ở lần vào sau — xem logic
+     * có sẵn trong ui_shell_switch_tab(). */
+    ui_shell_switch_tab(TAB_ORDERS);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
  * DỰNG SHELL
  * ──────────────────────────────────────────────────────────────────────── */
 void ui_shell_build(void)
@@ -366,6 +468,11 @@ void ui_shell_build(void)
 
     build_bottom_nav(s_shell_root);
     ui_help_create_button(s_shell_root);
+
+    /* Dựng SAU CÙNG trên "root" (không phải s_shell_root) để luôn nổi trên
+     * cả shell lẫn màn đăng nhập khi được hiện (move_foreground phòng hờ
+     * nếu có gì dựng thêm sau này). */
+    build_standby_overlay(root);
 
     lv_timer_create(tick_timer_cb, 500, NULL);
 }
@@ -428,8 +535,13 @@ void ui_shell_refresh_chrome(void)
 {
     app_state_t *st = app_state();
 
+    /* Giờ thật (không còn mô phỏng) — localtime() áp TZ GMT+7 đã set ở
+     * main.c, giờ hệ thống (UTC) tự cập nhật qua NTP khi có WiFi. */
+    time_t now = time(NULL);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
     char buf[8];
-    snprintf(buf, sizeof(buf), "%02d:%02d", s_demo_hour, s_demo_min);
+    snprintf(buf, sizeof(buf), "%02d:%02d", tmv.tm_hour, tmv.tm_min);
     lv_label_set_text(s_clock_label, buf);
 
     lv_obj_set_style_bg_color(s_dot_wifi, ui_common_link_color(st->wifi_link), 0);
@@ -467,22 +579,24 @@ void ui_shell_refresh_chrome(void)
 static void tick_timer_cb(lv_timer_t *t)
 {
     LV_UNUSED(t);
-    static int s_tick = 0;
-    s_tick++;
-
-    /* đồng hồ: +1 phút mỗi ~30s mô phỏng (thật ra tick 500ms => 60 tick = 30s) */
-    if (s_tick % 60 == 0) {
-        s_demo_min++;
-        if (s_demo_min >= 60) { s_demo_min = 0; s_demo_hour = (s_demo_hour + 1) % 24; }
-    }
 
     app_state_sim_tick();
     app_state_refresh_alerts();
     ui_shell_refresh_chrome();
 
+    bool standby_active = s_standby_overlay && !lv_obj_has_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN);
+    if (standby_active) {
+        standby_update_clock();
+        return;   /* đang che toàn màn hình — không cần vẽ lại tab bên dưới */
+    }
+
     if (app_state()->logged_in) {
         app_tab_t tab = app_state()->current_tab;
         if (tab == TAB_WEIGHING) ui_weighing_refresh();
         else if (tab == TAB_SUGGESTIONS) ui_alerts_refresh();
+        else if (tab == TAB_SETTINGS) {
+            ui_settings_tick();
+            if (lv_display_get_inactive_time(NULL) >= SETTINGS_IDLE_MS) standby_enter();
+        }
     }
 }

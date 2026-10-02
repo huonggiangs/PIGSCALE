@@ -19,6 +19,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>   /* setenv */
+#include <time.h>     /* tzset */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -59,6 +61,17 @@ void app_main(void)
     /* 1. NVS ---------------------------------------------------------------- */
     ESP_ERROR_CHECK(nvs_init());
     ESP_LOGI(TAG, "[1/6] NVS OK");
+
+    /* Múi giờ cố định GMT+7 (Việt Nam) — thiết bị chỉ triển khai trong nước,
+     * không cần màn chọn múi giờ. localtime()/strftime() dùng ở khắp nơi
+     * (đồng hồ header, màn Cài đặt, màn chờ) sẽ tự hiển thị đúng giờ VN
+     * ngay khi giờ hệ thống (UTC) được đặt — qua NTP (wifi_manager.c) hoặc
+     * chỉnh tay. Trước đây KHÔNG có dòng này ở đâu trong dự án → localtime()
+     * luôn trả về giờ UTC (lệch 7 tiếng so với giờ VN thực tế). POSIX TZ
+     * "ICT-7" = Indochina Time, lệch UTC-(-7) = UTC+7 (dấu NGƯỢC theo chuẩn
+     * POSIX). */
+    setenv("TZ", "ICT-7", 1);
+    tzset();
 
     /* 2. Network stack ------------------------------------------------------ */
     ESP_ERROR_CHECK(esp_netif_init());

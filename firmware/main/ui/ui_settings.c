@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "ui_settings.h"
 #include "ui_theme.h"
 #include "ui_common.h"
@@ -473,6 +474,89 @@ static void build_version_section(lv_obj_t *host)
 }
 
 /* ────────────────────────────────────────────────────────────────────────
+ * THỜI GIAN HỆ THỐNG — múi giờ cố định GMT+7 (Việt Nam), đồng bộ qua NTP
+ * khi có WiFi (xem main.c: setenv TZ, wifi_manager.c: start_sntp()).
+ * ──────────────────────────────────────────────────────────────────────── */
+static lv_obj_t *s_time_now_label;
+static lv_obj_t *s_time_sync_label;
+
+static void time_sync_btn_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    if (!app_state()->wifi_connected) {
+        ui_shell_toast("Cần kết nối Wi-Fi để đồng bộ giờ qua Internet");
+        return;
+    }
+    app_state_time_force_sync();
+    ui_shell_toast("Đang đồng bộ giờ qua Internet (NTP)...");
+    ui_settings_refresh();
+}
+
+static void build_time_section(lv_obj_t *host)
+{
+    lv_obj_t *card = ui_common_card(host);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(card, 8, 0);
+
+    lv_obj_t *head = lv_obj_create(card);
+    lv_obj_remove_style_all(head);
+    lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(head, LV_PCT(100));
+    lv_obj_set_height(head, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE);
+    make_section_title(head, "THỜI GIAN HỆ THỐNG");
+    ui_common_badge(head, "GMT+7 · Việt Nam", UI_COLOR_PRIMARY_SOFT, UI_COLOR_PRIMARY);
+
+    time_t now = time(NULL);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    static const char *k_wd[7] = {"Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"};
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d — %s, %02d/%02d/%04d",
+             tmv.tm_hour, tmv.tm_min, tmv.tm_sec, k_wd[tmv.tm_wday],
+             tmv.tm_mday, tmv.tm_mon + 1, tmv.tm_year + 1900);
+    s_time_now_label = lv_label_create(card);
+    lv_label_set_text(s_time_now_label, buf);
+    lv_obj_set_style_text_font(s_time_now_label, UI_FONT_H3_BOLD, 0);
+    lv_obj_set_style_text_color(s_time_now_label, UI_COLOR_HEADING, 0);
+
+    bool synced = app_state_time_is_synced();
+    s_time_sync_label = lv_label_create(card);
+    lv_label_set_text(s_time_sync_label, synced
+        ? "Đã đồng bộ qua Internet (NTP)"
+        : (app_state()->wifi_connected ? "Đang đồng bộ..." : "Chưa đồng bộ — mất kết nối Wi-Fi"));
+    lv_obj_set_style_text_font(s_time_sync_label, UI_FONT_XS, 0);
+    lv_obj_set_style_text_color(s_time_sync_label, synced ? UI_COLOR_SUCCESS : UI_COLOR_WARNING, 0);
+
+    lv_obj_t *sync_btn = ui_common_button_outline(card, "Đồng bộ lại qua Internet",
+                                                   UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_set_width(sync_btn, LV_PCT(100));
+    lv_obj_add_event_cb(sync_btn, time_sync_btn_cb, LV_EVENT_CLICKED, NULL);
+}
+
+void ui_settings_tick(void)
+{
+    if (!s_time_now_label || !s_time_sync_label) return;
+
+    time_t now = time(NULL);
+    struct tm tmv;
+    localtime_r(&now, &tmv);
+    static const char *k_wd[7] = {"Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"};
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d — %s, %02d/%02d/%04d",
+             tmv.tm_hour, tmv.tm_min, tmv.tm_sec, k_wd[tmv.tm_wday],
+             tmv.tm_mday, tmv.tm_mon + 1, tmv.tm_year + 1900);
+    lv_label_set_text(s_time_now_label, buf);
+
+    bool synced = app_state_time_is_synced();
+    lv_label_set_text(s_time_sync_label, synced
+        ? "Đã đồng bộ qua Internet (NTP)"
+        : (app_state()->wifi_connected ? "Đang đồng bộ..." : "Chưa đồng bộ — mất kết nối Wi-Fi"));
+    lv_obj_set_style_text_color(s_time_sync_label, synced ? UI_COLOR_SUCCESS : UI_COLOR_WARNING, 0);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
  * HIỂN THỊ (mục 4.10)
  * ──────────────────────────────────────────────────────────────────────── */
 static void bright_switch_cb(lv_event_t *e)
@@ -625,6 +709,8 @@ void ui_settings_refresh(void)
 {
     ui_common_clear(s_host);
     s_print_preview = NULL;
+    s_time_now_label = NULL;
+    s_time_sync_label = NULL;
 
     app_state_t *st = app_state();
     employee_t *e = (st->current_employee_idx >= 0) ? &st->employees[st->current_employee_idx] : NULL;
@@ -640,5 +726,6 @@ void ui_settings_refresh(void)
     build_p5_section(s_host);
     build_printer_section(s_host);
     build_version_section(s_host);
+    build_time_section(s_host);
     build_display_section(s_host);
 }

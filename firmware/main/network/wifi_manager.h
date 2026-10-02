@@ -59,6 +59,16 @@ void wifi_manager_set_enabled(bool enabled);
 /** True khi WiFi đang được bật (mặc định bật lúc khởi động). */
 bool wifi_manager_is_enabled(void);
 
+/** True khi đã nhận được ít nhất 1 lần đồng bộ giờ qua NTP kể từ lúc khởi
+ *  động (xem start_sntp() — tự chạy sau khi có IP). Đồng hồ hệ thống hiển
+ *  thị đúng giờ Việt Nam (GMT+7) ngay cả khi false (TZ đã set từ main.c),
+ *  nhưng false nghĩa là giờ gốc có thể lệch (chưa từng lấy mốc từ Internet). */
+bool wifi_manager_is_time_synced(void);
+
+/** Bắt buộc đồng bộ lại giờ qua NTP ngay. No-op nếu chưa từng kết nối WiFi
+ *  (SNTP chưa init) hoặc đang mất mạng. */
+void wifi_manager_force_ntp_sync(void);
+
 #ifdef __cplusplus
 }
 #endif

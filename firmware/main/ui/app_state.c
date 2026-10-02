@@ -546,6 +546,16 @@ bool app_state_wifi_is_scanning(void)
     return wifi_manager_is_scanning();
 }
 
+bool app_state_time_is_synced(void)
+{
+    return wifi_manager_is_time_synced();
+}
+
+void app_state_time_force_sync(void)
+{
+    wifi_manager_force_ntp_sync();
+}
+
 static void app_state_wifi_sync(void)
 {
     uint32_t gen = 0;

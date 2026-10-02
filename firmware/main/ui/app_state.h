@@ -298,6 +298,10 @@ bool app_state_wifi_is_scanning(void);   /* để UI hiện "Đang quét..." + k
 void app_state_wifi_connect(int idx, const char *pass);
 void app_state_select_station(int idx);
 
+/* ── Thời gian hệ thống (GMT+7 Việt Nam — xem main.c setenv TZ) ──────────── */
+bool app_state_time_is_synced(void);   /* đã có mốc giờ từ NTP lần nào chưa */
+void app_state_time_force_sync(void);  /* ép đồng bộ lại qua NTP (cần có WiFi) */
+
 #ifdef __cplusplus
 }
 #endif

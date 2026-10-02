@@ -48,13 +48,22 @@ static volatile bool     s_enabled      = true;    /* công tắc WiFi (UI bật
 static volatile int8_t   s_rssi         = -100;    /* RSSI cache (cập nhật khi có IP) */
 static int               s_retry        = 0;
 static bool              s_sntp_init    = false;   /* SNTP đã khởi tạo chưa */
+static volatile bool     s_time_synced  = false;   /* đã nhận >=1 lần đồng bộ NTP */
 
-/* Bật SNTP (đồng bộ giờ) sau khi có IP. Giờ hệ thống = UTC; localtime() áp TZ
- * đã set bởi ui_config (setenv TZ) → đồng hồ hiển thị đúng múi giờ đã chọn. */
+/* Giờ hệ thống = UTC; localtime() áp TZ="ICT-7" (set cố định ở main.c lúc
+ * boot — thiết bị chỉ dùng ở Việt Nam) → đồng hồ hiển thị đúng GMT+7. */
+static void time_sync_notify_cb(struct timeval *tv)
+{
+    (void)tv;
+    s_time_synced = true;
+    ESP_LOGI(TAG, "Da dong bo gio qua NTP");
+}
+
 static void start_sntp(void)
 {
     if (s_sntp_init) { esp_netif_sntp_start(); return; }
     esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    cfg.sync_cb = time_sync_notify_cb;
     if (esp_netif_sntp_init(&cfg) == ESP_OK) {
         s_sntp_init = true;
         ESP_LOGI(TAG, "SNTP bat dau (pool.ntp.org) — dong bo ngay gio");
@@ -214,6 +223,14 @@ bool wifi_manager_is_connected(void){ return s_connected; }
 bool wifi_manager_is_connecting(void){ return s_connecting; }
 bool wifi_manager_is_enabled(void)  { return s_enabled; }
 const char *wifi_manager_get_ssid(void) { return s_ssid; }
+bool wifi_manager_is_time_synced(void) { return s_time_synced; }
+
+void wifi_manager_force_ntp_sync(void)
+{
+    if (!s_connected || !s_sntp_init) return;
+    s_time_synced = false;
+    esp_netif_sntp_start();   /* "restart it if already started" — ép lấy mốc mới */
+}
 
 /* Trả số vạch từ RSSI cache (không gọi RPC → an toàn gọi trong LVGL timer). */
 int wifi_manager_get_bars(void)
