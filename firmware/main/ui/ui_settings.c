@@ -16,9 +16,9 @@ static lv_obj_t *s_kb;     /* bàn phím dùng chung cho các ô nhập (mật k
                              * với ô tìm kiếm ở ui_history.c */
 static bool s_wifi_show_all;   /* true = hiện đủ danh sách; false = thu gọn khi đã kết nối */
 
-/* ── màn khoá PIN (Nhân viên cân) ────────────────────────────────────────── */
-static lv_obj_t *s_lock_pin_dots_host;
-static lv_obj_t *s_lock_error_label;
+/* ── Gateway: tìm camera trong mạng ──────────────────────────────────────── */
+static lv_obj_t *s_cam_ip_ta;      /* ô "Địa chỉ IP camera" — Chọn từ danh sách tìm được sẽ điền vào đây */
+static lv_obj_t *s_cam_list_host;  /* danh sách camera tìm được — ẩn cho tới khi bấm Tìm kiếm */
 
 /* ── xem trước phiếu in ──────────────────────────────────────────────────── */
 static lv_obj_t *s_print_preview;
@@ -267,7 +267,75 @@ static void build_wifi_section(lv_obj_t *host)
 static void gateway_check_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
-    ui_shell_toast("Gateway hoạt động bình thường (demo)");
+    ui_shell_toast("Đang kết nối Gateway/Camera... (demo)");
+}
+
+static void gateway_save_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    /* Chưa có NVS schema riêng cho Gateway/Camera trong app_state.h (khác
+     * với Wi-Fi — đã lưu NVS thật qua wifi_manager_connect()) — xác nhận
+     * bằng toast, cùng mức độ hoàn thiện demo với phần còn lại của card
+     * này cho tới khi có backend thật. */
+    ui_shell_toast("Đã lưu cấu hình Gateway/Camera");
+}
+
+/* Danh sách camera "tìm thấy" mô phỏng — chưa có giao thức quét thật
+ * (ONVIF/mDNS) trong app_state.h. */
+typedef struct { const char *name; const char *ip; } demo_camera_t;
+static const demo_camera_t k_demo_cameras[] = {
+    { "Camera cổng vào",  "192.168.1.21" },
+    { "Camera khu cân",   "192.168.1.22" },
+    { "Camera bãi xuất",  "192.168.1.23" },
+};
+#define DEMO_CAMERA_COUNT ((int)(sizeof(k_demo_cameras) / sizeof(k_demo_cameras[0])))
+
+static void cam_pick_cb(lv_event_t *e)
+{
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    if (idx < 0 || idx >= DEMO_CAMERA_COUNT || !s_cam_ip_ta) return;
+    lv_textarea_set_text(s_cam_ip_ta, k_demo_cameras[idx].ip);
+    ui_shell_toast("Đã chọn camera — kiểm tra tài khoản rồi bấm Kết nối");
+}
+
+static void cam_search_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    if (!s_cam_list_host) return;
+    ui_shell_toast("Đang tìm camera trong mạng... (demo)");
+
+    /* Cập nhật TẠI CHỖ (không gọi ui_settings_refresh) để không mất nội
+     * dung đang gõ dở ở Token/tài khoản camera — cùng cách printer preview
+     * toggle đang làm với s_print_preview. */
+    ui_common_clear(s_cam_list_host);
+    for (int i = 0; i < DEMO_CAMERA_COUNT; i++) {
+        lv_obj_t *row = lv_obj_create(s_cam_list_host);
+        lv_obj_remove_style_all(row);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_width(row, LV_PCT(100));
+        lv_obj_set_height(row, LV_SIZE_CONTENT);
+        lv_obj_set_style_pad_ver(row, 4, 0);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t *info = lv_obj_create(row);
+        lv_obj_remove_style_all(info);
+        lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_size(info, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_clear_flag(info, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *name = lv_label_create(info);
+        lv_label_set_text(name, k_demo_cameras[i].name);
+        lv_obj_set_style_text_font(name, UI_FONT_BODY_BOLD, 0);
+        lv_obj_set_style_text_color(name, UI_COLOR_HEADING, 0);
+        lv_obj_t *ip = lv_label_create(info);
+        lv_label_set_text(ip, k_demo_cameras[i].ip);
+        lv_obj_set_style_text_font(ip, UI_FONT_XS, 0);
+        lv_obj_set_style_text_color(ip, UI_COLOR_BODY, 0);
+
+        lv_obj_t *pick_btn = ui_common_button_outline(row, "Chọn", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+        lv_obj_add_event_cb(pick_btn, cam_pick_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    }
+    lv_obj_clear_flag(s_cam_list_host, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void build_gateway_section(lv_obj_t *host)
@@ -300,15 +368,53 @@ static void build_gateway_section(lv_obj_t *host)
     lv_obj_set_style_text_font(cam_title, UI_FONT_H5_BOLD, 0);
     lv_obj_set_style_pad_top(cam_title, 4, 0);
 
+    /* Tìm camera trong mạng */
+    make_field_label(card, "Tìm camera trong mạng");
+    lv_obj_t *search_row = lv_obj_create(card);
+    lv_obj_remove_style_all(search_row);
+    lv_obj_set_flex_flow(search_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(search_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(search_row, 8, 0);
+    lv_obj_set_width(search_row, LV_PCT(100));
+    lv_obj_set_height(search_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(search_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *search_ta = make_text_field(search_row, "Lọc theo tên/IP (tuỳ chọn)...");
+    lv_obj_set_flex_grow(search_ta, 1);
+    lv_obj_t *search_btn = ui_common_button(search_row, "Tìm kiếm", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_add_event_cb(search_btn, cam_search_cb, LV_EVENT_CLICKED, NULL);
+
+    s_cam_list_host = lv_obj_create(card);
+    lv_obj_remove_style_all(s_cam_list_host);
+    lv_obj_set_flex_flow(s_cam_list_host, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_width(s_cam_list_host, LV_PCT(100));
+    lv_obj_set_height(s_cam_list_host, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(s_cam_list_host, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_cam_list_host, LV_OBJ_FLAG_HIDDEN);
+
+    make_field_label(card, "Địa chỉ IP camera");
+    s_cam_ip_ta = make_text_field(card, "Chọn camera ở trên hoặc nhập tay...");
+
     make_field_label(card, "Tên đăng nhập");
     make_text_field(card, "Tên đăng nhập camera...");
 
     make_field_label(card, "Mật khẩu");
     make_password_row(card, "Mật khẩu camera...");
 
-    lv_obj_t *check_btn = ui_common_button_outline(card, "Kiểm tra kết nối", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
-    lv_obj_set_width(check_btn, LV_PCT(100));
+    lv_obj_t *btn_row = lv_obj_create(card);
+    lv_obj_remove_style_all(btn_row);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(btn_row, 8, 0);
+    lv_obj_set_width(btn_row, LV_PCT(100));
+    lv_obj_set_height(btn_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *check_btn = ui_common_button_outline(btn_row, "Kết nối", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_set_flex_grow(check_btn, 1);
     lv_obj_add_event_cb(check_btn, gateway_check_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *save_btn = ui_common_button(btn_row, "Lưu", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_set_flex_grow(save_btn, 1);
+    lv_obj_add_event_cb(save_btn, gateway_save_cb, LV_EVENT_CLICKED, NULL);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -600,45 +706,16 @@ static void build_display_section(lv_obj_t *host)
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Khoá PIN (Nhân viên cân) — mục 4.10
+ * CHẶN TRUY CẬP — chỉ Kỹ thuật được vào tab Cài đặt (mục 4.10)
+ *
+ * Trước đây đây là màn "khoá PIN" cho operator: nhập lại ĐÚNG PIN của
+ * CHÍNH mình là mở khoá được — tức không hề chặn thật (ai cũng biết PIN
+ * của mình). Nhân viên cân/Quản lý giờ bị chặn HẲN theo vai trò (xem
+ * app_state_try_login: settings_unlocked = (role == ROLE_TECHNICIAN)) nên
+ * không còn bàn phím PIN ở đây nữa — họ không có cách nào tự mở được.
  * ──────────────────────────────────────────────────────────────────────── */
-static void lock_refresh_dots(void)
+static void build_forbidden_screen(lv_obj_t *host)
 {
-    ui_common_clear(s_lock_pin_dots_host);
-    ui_common_pin_dots(s_lock_pin_dots_host, (int)strlen(app_state()->pin_input), true);
-}
-
-static void lock_try_unlock(void)
-{
-    if (strlen(app_state()->pin_input) < 4) return;
-    if (app_state_try_settings_unlock()) {
-        ui_settings_refresh();
-    } else {
-        lv_label_set_text(s_lock_error_label, "Mã PIN không đúng.");
-        lv_obj_clear_flag(s_lock_error_label, LV_OBJ_FLAG_HIDDEN);
-        lock_refresh_dots();
-    }
-}
-
-static void lock_digit_cb(char digit, void *user_data)
-{
-    LV_UNUSED(user_data);
-    app_state_pin_digit(digit);
-    lock_refresh_dots();
-    lock_try_unlock();
-}
-
-static void lock_backspace_cb(void *user_data)
-{
-    LV_UNUSED(user_data);
-    app_state_pin_backspace();
-    lock_refresh_dots();
-}
-
-static void build_lock_screen(lv_obj_t *host)
-{
-    app_state_pin_clear();
-
     lv_obj_t *card = ui_common_card(host);
     lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(card, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -648,26 +725,15 @@ static void build_lock_screen(lv_obj_t *host)
     ui_common_icon(card, &img_icon_lock, UI_COLOR_ICON);
 
     lv_obj_t *msg = lv_label_create(card);
-    lv_label_set_text(msg, "Khu vực yêu cầu quyền quản lý");
+    lv_label_set_text(msg, "Khu vực chỉ dành cho Kỹ thuật viên");
     lv_obj_set_style_text_font(msg, UI_FONT_H4_BOLD, 0);
     lv_obj_set_style_text_color(msg, UI_COLOR_HEADING, 0);
-    lv_obj_set_style_pad_bottom(msg, 10, 0);
+    lv_obj_set_style_pad_bottom(msg, 6, 0);
 
-    s_lock_pin_dots_host = lv_obj_create(card);
-    lv_obj_remove_style_all(s_lock_pin_dots_host);
-    lv_obj_set_size(s_lock_pin_dots_host, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_bottom(s_lock_pin_dots_host, 12, 0);
-    lv_obj_clear_flag(s_lock_pin_dots_host, LV_OBJ_FLAG_SCROLLABLE);
-    ui_common_pin_dots(s_lock_pin_dots_host, 0, true);
-
-    s_lock_error_label = lv_label_create(card);
-    lv_label_set_text(s_lock_error_label, "Mã PIN không đúng.");
-    lv_obj_set_style_text_color(s_lock_error_label, UI_COLOR_DANGER, 0);
-    lv_obj_set_style_text_font(s_lock_error_label, UI_FONT_H5, 0);
-    lv_obj_set_style_pad_bottom(s_lock_error_label, 8, 0);
-    lv_obj_add_flag(s_lock_error_label, LV_OBJ_FLAG_HIDDEN);
-
-    ui_common_keypad(card, lock_digit_cb, lock_backspace_cb, NULL, true);
+    lv_obj_t *hint = lv_label_create(card);
+    lv_label_set_text(hint, "Đăng xuất và đăng nhập lại bằng tài khoản Kỹ thuật để cấu hình thiết bị.");
+    lv_obj_set_style_text_font(hint, UI_FONT_BODY, 0);
+    lv_obj_set_style_text_color(hint, UI_COLOR_BODY, 0);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -711,13 +777,17 @@ void ui_settings_refresh(void)
     s_print_preview = NULL;
     s_time_now_label = NULL;
     s_time_sync_label = NULL;
+    s_cam_ip_ta = NULL;
+    s_cam_list_host = NULL;
 
     app_state_t *st = app_state();
     employee_t *e = (st->current_employee_idx >= 0) ? &st->employees[st->current_employee_idx] : NULL;
-    bool locked = e && (e->role == ROLE_OPERATOR) && !st->settings_unlocked;
+    /* Chỉ Kỹ thuật được cấu hình — Nhân viên cân/Quản lý bị chặn hẳn (xem
+     * app_state_try_login: settings_unlocked = (role == ROLE_TECHNICIAN)). */
+    bool locked = !e || !st->settings_unlocked;
 
     if (locked) {
-        build_lock_screen(s_host);
+        build_forbidden_screen(s_host);
         return;
     }
 

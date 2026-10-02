@@ -158,7 +158,9 @@ bool app_state_try_login(void)
     if (strcmp(e->pin, s_state.pin_input) == 0) {
         s_state.logged_in = true;
         s_state.current_tab = TAB_ORDERS;
-        s_state.settings_unlocked = (e->role != ROLE_OPERATOR);
+        /* Chỉ Kỹ thuật được cấu hình thiết bị — Nhân viên cân và Quản lý bị
+         * chặn hẳn khỏi tab Cài đặt (không có đường vòng qua PIN). */
+        s_state.settings_unlocked = (e->role == ROLE_TECHNICIAN);
         app_state_pin_clear();
         return true;
     }
@@ -172,19 +174,6 @@ void app_state_logout(void)
     s_state.current_employee_idx = -1;
     s_state.settings_unlocked = false;
     app_state_pin_clear();
-}
-
-bool app_state_try_settings_unlock(void)
-{
-    if (s_state.current_employee_idx < 0) return false;
-    employee_t *e = &s_state.employees[s_state.current_employee_idx];
-    if (strcmp(e->pin, s_state.pin_input) == 0) {
-        s_state.settings_unlocked = true;
-        app_state_pin_clear();
-        return true;
-    }
-    app_state_pin_clear();
-    return false;
 }
 
 /* ── Đơn hàng ────────────────────────────────────────────────────────────── */

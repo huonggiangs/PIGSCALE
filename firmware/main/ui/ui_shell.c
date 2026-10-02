@@ -421,8 +421,7 @@ static void standby_dismiss(void)
     if (!s_standby_overlay || lv_obj_has_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN)) return;
     lv_obj_add_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN);
     /* Tab Cài đặt "không có tác động" (chưa lưu gì) nên về thẳng Đơn hàng là
-     * an toàn; PIN Cài đặt (operator) tự khoá lại ở lần vào sau — xem logic
-     * có sẵn trong ui_shell_switch_tab(). */
+     * an toàn. */
     ui_shell_switch_tab(TAB_ORDERS);
 }
 
@@ -496,14 +495,6 @@ void ui_shell_logout(void)
 void ui_shell_switch_tab(app_tab_t tab)
 {
     app_state_t *st = app_state();
-
-    /* Khoá PIN Cài đặt: operator phải nhập lại PIN MỖI LẦN mở tab (luongcan.md mục 2) */
-    if (tab == TAB_SETTINGS && st->current_tab != TAB_SETTINGS) {
-        employee_t *e = (st->current_employee_idx >= 0) ? &st->employees[st->current_employee_idx] : NULL;
-        if (e && e->role == ROLE_OPERATOR) {
-            st->settings_unlocked = false;
-        }
-    }
 
     st->current_tab = tab;
     for (int i = 0; i < TAB_COUNT; i++) {

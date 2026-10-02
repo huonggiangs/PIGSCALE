@@ -198,7 +198,13 @@ lv_obj_t *ui_history_create(lv_obj_t *parent)
     lv_obj_set_width(s_summary_row, LV_PCT(100));
     lv_obj_set_height(s_summary_row, LV_SIZE_CONTENT);
     lv_obj_clear_flag(s_summary_row, LV_OBJ_FLAG_SCROLLABLE);
+    /* ui_common_card() không tự đặt flex layout — phải set COLUMN ở đây,
+     * nếu không 2 label con (tiêu đề nhỏ + số lớn) đều mặc định nằm ở
+     * (0,0) và CHỒNG KHÍT lên nhau (lỗi "ký tự chồng lên nhau" trên card
+     * Tổng số phiếu/Tổng số con/Tổng khối lượng). */
     lv_obj_t *c1 = ui_common_card(s_summary_row); lv_obj_set_flex_grow(c1, 1);
+    lv_obj_set_flex_flow(c1, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(c1, 4, 0);
     lv_obj_t *t1 = lv_label_create(c1); lv_label_set_text(t1, "Tổng số phiếu");
     lv_obj_set_style_text_font(t1, UI_FONT_XS, 0); lv_obj_set_style_text_color(t1, UI_COLOR_BODY, 0);
     s_summary_tickets = lv_label_create(c1);
@@ -206,6 +212,8 @@ lv_obj_t *ui_history_create(lv_obj_t *parent)
     lv_obj_set_style_text_color(s_summary_tickets, UI_COLOR_HEADING, 0);
 
     lv_obj_t *c2 = ui_common_card(s_summary_row); lv_obj_set_flex_grow(c2, 1);
+    lv_obj_set_flex_flow(c2, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(c2, 4, 0);
     lv_obj_t *t2 = lv_label_create(c2); lv_label_set_text(t2, "Tổng số con");
     lv_obj_set_style_text_font(t2, UI_FONT_XS, 0); lv_obj_set_style_text_color(t2, UI_COLOR_BODY, 0);
     s_summary_qty = lv_label_create(c2);
@@ -213,6 +221,8 @@ lv_obj_t *ui_history_create(lv_obj_t *parent)
     lv_obj_set_style_text_color(s_summary_qty, UI_COLOR_HEADING, 0);
 
     lv_obj_t *c3 = ui_common_card(s_summary_row); lv_obj_set_flex_grow(c3, 1);
+    lv_obj_set_flex_flow(c3, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(c3, 4, 0);
     lv_obj_t *t3 = lv_label_create(c3); lv_label_set_text(t3, "Tổng khối lượng");
     lv_obj_set_style_text_font(t3, UI_FONT_XS, 0); lv_obj_set_style_text_color(t3, UI_COLOR_BODY, 0);
     s_summary_weight = lv_label_create(c3);

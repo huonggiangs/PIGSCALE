@@ -205,7 +205,10 @@ typedef struct {
 
     /* điều hướng */
     app_tab_t current_tab;
-    bool settings_unlocked;       /* đã mở khoá Cài đặt (cho operator) trong phiên này */
+    bool settings_unlocked;       /* true khi role == ROLE_TECHNICIAN (set lúc đăng nhập,
+                                      xem app_state_try_login) — chỉ Kỹ thuật được vào tab
+                                      Cài đặt, Nhân viên cân/Quản lý bị chặn hẳn, không có
+                                      đường vòng qua PIN như trước. */
 
     /* dữ liệu tĩnh / demo */
     employee_t employees[APP_MAX_EMPLOYEES];
@@ -262,9 +265,6 @@ void app_state_pin_clear(void);
 /* Trả về true nếu đăng nhập thành công (PIN đủ 4 số & đúng) */
 bool app_state_try_login(void);
 void app_state_logout(void);
-
-/* PIN gate riêng cho tab Cài đặt (operator) — dùng chung state pin_input */
-bool app_state_try_settings_unlock(void);
 
 /* ── Đơn hàng ────────────────────────────────────────────────────────────── */
 /* Lọc theo order_filter hiện tại + phân trang, trả về mảng con trỏ & số lượng trên trang */
