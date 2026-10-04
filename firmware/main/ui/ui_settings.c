@@ -487,7 +487,7 @@ static void build_gateway_section(lv_obj_t *host)
 
     make_field_label(card, "Mật khẩu");
     s_cam_pass_ta = make_password_row(card, "Mật khẩu camera...");
-    lv_textarea_set_text(s_cam_pass_ta, "Vivoo@002");
+    lv_textarea_set_text(s_cam_pass_ta, "Vivoo@003");
 
     lv_obj_t *cam_connect_btn = ui_common_button(card, "Kiểm tra kết nối Camera", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
     lv_obj_set_width(cam_connect_btn, LV_PCT(100));

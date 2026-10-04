@@ -135,10 +135,11 @@ void app_state_init(void)
      * app_state_camera_test_connect/app_state_camera_sync). */
     s_state.gateway_link = LINK_LOST;
     s_state.camera_link = LINK_LOST;
-    /* Camera Vivoo thật đã lắp cho trạm này (Web IP Camera, HTTP port 80 —
+    /* Camera Vivoo thật đã lắp cho trạm này (Web IP Camera, HTTPS cổng 80 —
      * xem docs camera Vivoo). Đây KHÔNG phải demo: điền sẵn làm cấu hình
-     * mặc định, vẫn sửa được ở Cài đặt. */
-    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "192.168.1.16");
+     * mặc định, vẫn sửa được ở Cài đặt. IP/mật khẩu cập nhật theo yêu cầu
+     * mới nhất (192.168.1.10 / Vivoo@003). */
+    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "192.168.1.10");
     s_state.camera_port = 80;
     s_state.camera_last_check_us = 0;
 
