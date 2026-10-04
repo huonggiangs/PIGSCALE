@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "ui_settings.h"
@@ -18,7 +19,10 @@ static bool s_wifi_show_all;   /* true = hiện đủ danh sách; false = thu g�
 
 /* ── Gateway: tìm camera trong mạng ──────────────────────────────────────── */
 static lv_obj_t *s_cam_ip_ta;      /* ô "Địa chỉ IP camera" — Chọn từ danh sách tìm được sẽ điền vào đây */
+static lv_obj_t *s_cam_port_ta;
+static lv_obj_t *s_cam_user_ta, *s_cam_pass_ta;
 static lv_obj_t *s_cam_list_host;  /* danh sách camera tìm được — ẩn cho tới khi bấm Tìm kiếm */
+static lv_obj_t *s_cam_status_dot, *s_cam_status_label;  /* cập nhật tại chỗ — xem camera_client.c */
 static lv_obj_t *s_gw_ip_ta, *s_gw_port_ta;        /* Gateway: IP/Cổng do người dùng nhập — không hardcode */
 static lv_obj_t *s_gw_status_dot, *s_gw_status_label;  /* cập nhật tại chỗ sau khi bấm Kết nối */
 
@@ -282,7 +286,7 @@ static void gateway_check_cb(lv_event_t *e)
     app_state()->gateway_link = LINK_OK;
     if (s_gw_status_dot) lv_obj_set_style_bg_color(s_gw_status_dot, ui_common_link_color(LINK_OK), 0);
     if (s_gw_status_label) lv_label_set_text(s_gw_status_label, "Đã kết nối");
-    ui_shell_toast("Đang kết nối Gateway/Camera... (demo)");
+    ui_shell_toast("Đang kết nối Gateway... (demo)");
 }
 
 static void gateway_save_cb(lv_event_t *e)
@@ -295,62 +299,86 @@ static void gateway_save_cb(lv_event_t *e)
     ui_shell_toast("Đã lưu cấu hình Gateway/Camera");
 }
 
-/* Danh sách camera "tìm thấy" mô phỏng — chưa có giao thức quét thật
- * (ONVIF/mDNS) trong app_state.h. */
-typedef struct { const char *name; const char *ip; } demo_camera_t;
-static const demo_camera_t k_demo_cameras[] = {
-    { "Camera cổng vào",  "192.168.1.21" },
-    { "Camera khu cân",   "192.168.1.22" },
-    { "Camera bãi xuất",  "192.168.1.23" },
-};
-#define DEMO_CAMERA_COUNT ((int)(sizeof(k_demo_cameras) / sizeof(k_demo_cameras[0])))
-
+/* Camera THẬT đã lắp cho trạm này (Vivoo Web IP Camera — xem
+ * docs: WEB_IP_CAMERA_GUIDE_VIVOO.pdf, HTTP port mặc định 80). Khác với
+ * trước đây (3 IP demo .21/.22/.23 tự bịa) — đây là địa chỉ thật, lấy từ
+ * app_state()->camera_ip/camera_port (nguồn sự thật duy nhất, đồng bộ với
+ * lần tự kiểm tra lại định kỳ trong app_state_camera_sync()). "Tìm kiếm"
+ * ở đây xác nhận lại camera đã biết — KHÔNG phải dò toàn mạng (tài liệu
+ * Vivoo không công bố giao thức discovery/ONVIF cụ thể để dò thật). */
 static void cam_pick_cb(lv_event_t *e)
 {
-    int idx = (int)(intptr_t)lv_event_get_user_data(e);
-    if (idx < 0 || idx >= DEMO_CAMERA_COUNT || !s_cam_ip_ta) return;
-    lv_textarea_set_text(s_cam_ip_ta, k_demo_cameras[idx].ip);
-    ui_shell_toast("Đã chọn camera — kiểm tra tài khoản rồi bấm Kết nối");
+    LV_UNUSED(e);
+    app_state_t *st = app_state();
+    if (s_cam_ip_ta) lv_textarea_set_text(s_cam_ip_ta, st->camera_ip);
+    if (s_cam_port_ta) {
+        char pbuf[8]; snprintf(pbuf, sizeof(pbuf), "%u", (unsigned)st->camera_port);
+        lv_textarea_set_text(s_cam_port_ta, pbuf);
+    }
+    ui_shell_toast("Đã chọn camera — bấm Kiểm tra kết nối để xác nhận");
 }
 
 static void cam_search_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
     if (!s_cam_list_host) return;
-    ui_shell_toast("Đang tìm camera trong mạng... (demo)");
+    app_state_t *st = app_state();
 
     /* Cập nhật TẠI CHỖ (không gọi ui_settings_refresh) để không mất nội
      * dung đang gõ dở ở Token/tài khoản camera — cùng cách printer preview
      * toggle đang làm với s_print_preview. */
     ui_common_clear(s_cam_list_host);
-    for (int i = 0; i < DEMO_CAMERA_COUNT; i++) {
-        lv_obj_t *row = lv_obj_create(s_cam_list_host);
-        lv_obj_remove_style_all(row);
-        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_height(row, LV_SIZE_CONTENT);
-        lv_obj_set_style_pad_ver(row, 4, 0);
-        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *row = lv_obj_create(s_cam_list_host);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(row, LV_PCT(100));
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_ver(row, 4, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
-        lv_obj_t *info = lv_obj_create(row);
-        lv_obj_remove_style_all(info);
-        lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_size(info, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_clear_flag(info, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_t *name = lv_label_create(info);
-        lv_label_set_text(name, k_demo_cameras[i].name);
-        lv_obj_set_style_text_font(name, UI_FONT_BODY_BOLD, 0);
-        lv_obj_set_style_text_color(name, UI_COLOR_HEADING, 0);
-        lv_obj_t *ip = lv_label_create(info);
-        lv_label_set_text(ip, k_demo_cameras[i].ip);
-        lv_obj_set_style_text_font(ip, UI_FONT_XS, 0);
-        lv_obj_set_style_text_color(ip, UI_COLOR_BODY, 0);
+    lv_obj_t *info = lv_obj_create(row);
+    lv_obj_remove_style_all(info);
+    lv_obj_set_flex_flow(info, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_size(info, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(info, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *name = lv_label_create(info);
+    lv_label_set_text(name, "Camera Vivoo (Web IP Camera)");
+    lv_obj_set_style_text_font(name, UI_FONT_BODY_BOLD, 0);
+    lv_obj_set_style_text_color(name, UI_COLOR_HEADING, 0);
+    lv_obj_t *ip = lv_label_create(info);
+    char ibuf[56]; snprintf(ibuf, sizeof(ibuf), "%s : %u", st->camera_ip, (unsigned)st->camera_port);
+    lv_label_set_text(ip, ibuf);
+    lv_obj_set_style_text_font(ip, UI_FONT_XS, 0);
+    lv_obj_set_style_text_color(ip, UI_COLOR_BODY, 0);
 
-        lv_obj_t *pick_btn = ui_common_button_outline(row, "Chọn", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
-        lv_obj_add_event_cb(pick_btn, cam_pick_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-    }
+    lv_obj_t *pick_btn = ui_common_button_outline(row, "Chọn", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_add_event_cb(pick_btn, cam_pick_cb, LV_EVENT_CLICKED, NULL);
+
     lv_obj_clear_flag(s_cam_list_host, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Kiểm tra kết nối camera THẬT — HTTP GET tới ip:port (xem camera_client.c).
+ * Khác hẳn gateway_check_cb (vẫn demo): đây gọi task nền thật, kết quả cập
+ * nhật app_state()->camera_link, đọc lại trong app_state_camera_sync() mỗi
+ * tick (0.5s) kể cả khi không ở tab Cài đặt — hiển thị "real-time" cả ở
+ * header lẫn tab Cân. */
+static void cam_connect_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    const char *ip = s_cam_ip_ta ? lv_textarea_get_text(s_cam_ip_ta) : "";
+    uint16_t port = 80;
+    if (s_cam_port_ta) {
+        int p = atoi(lv_textarea_get_text(s_cam_port_ta));
+        if (p > 0 && p <= 65535) port = (uint16_t)p;
+    }
+    if (!ip[0]) {
+        ui_shell_toast("Nhập địa chỉ IP camera trước");
+        return;
+    }
+    app_state_camera_test_connect(ip, port);
+    if (s_cam_status_label) lv_label_set_text(s_cam_status_label, "Đang kiểm tra...");
+    ui_shell_toast("Đang kiểm tra kết nối camera...");
 }
 
 static void build_gateway_section(lv_obj_t *host)
@@ -399,23 +427,25 @@ static void build_gateway_section(lv_obj_t *host)
     make_field_label(card, "Token truy cập");
     make_text_field(card, "Nhập token...");
 
-    lv_obj_t *cam_title = make_section_title(card, "TÀI KHOẢN CAMERA");
+    lv_obj_t *cam_title_row = lv_obj_create(card);
+    lv_obj_remove_style_all(cam_title_row);
+    lv_obj_set_flex_flow(cam_title_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cam_title_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(cam_title_row, LV_PCT(100));
+    lv_obj_set_height(cam_title_row, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_top(cam_title_row, 4, 0);
+    lv_obj_clear_flag(cam_title_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *cam_title = make_section_title(cam_title_row, "CAMERA (VIVOO)");
     lv_obj_set_style_text_font(cam_title, UI_FONT_H5_BOLD, 0);
-    lv_obj_set_style_pad_top(cam_title, 4, 0);
+    s_cam_status_dot = ui_common_status_dot(cam_title_row, gst->camera_link);
+    s_cam_status_label = make_field_label(cam_title_row, gst->camera_link == LINK_OK ? "Đã kết nối" : "Chưa kết nối");
 
-    /* Tìm camera trong mạng */
-    make_field_label(card, "Tìm camera trong mạng");
-    lv_obj_t *search_row = lv_obj_create(card);
-    lv_obj_remove_style_all(search_row);
-    lv_obj_set_flex_flow(search_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(search_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(search_row, 8, 0);
-    lv_obj_set_width(search_row, LV_PCT(100));
-    lv_obj_set_height(search_row, LV_SIZE_CONTENT);
-    lv_obj_clear_flag(search_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *search_ta = make_text_field(search_row, "Lọc theo tên/IP (tuỳ chọn)...");
-    lv_obj_set_flex_grow(search_ta, 1);
-    lv_obj_t *search_btn = ui_common_button(search_row, "Tìm kiếm", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    /* Tìm camera trong mạng — xác nhận lại địa chỉ camera THẬT đã cấu hình
+     * (app_state()->camera_ip/port). Tài liệu Vivoo không công bố giao
+     * thức discovery/ONVIF cụ thể nên KHÔNG dò toàn mạng (không bịa). */
+    make_field_label(card, "Camera đã cấu hình cho trạm này");
+    lv_obj_t *search_btn = ui_common_button_outline(card, "Tìm kiếm", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_set_width(search_btn, LV_PCT(100));
     lv_obj_add_event_cb(search_btn, cam_search_cb, LV_EVENT_CLICKED, NULL);
 
     s_cam_list_host = lv_obj_create(card);
@@ -426,14 +456,54 @@ static void build_gateway_section(lv_obj_t *host)
     lv_obj_clear_flag(s_cam_list_host, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_cam_list_host, LV_OBJ_FLAG_HIDDEN);
 
-    make_field_label(card, "Địa chỉ IP camera");
-    s_cam_ip_ta = make_text_field(card, "Chọn camera ở trên hoặc nhập tay...");
+    lv_obj_t *cam_addr_row = lv_obj_create(card);
+    lv_obj_remove_style_all(cam_addr_row);
+    lv_obj_set_flex_flow(cam_addr_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(cam_addr_row, 8, 0);
+    lv_obj_set_width(cam_addr_row, LV_PCT(100));
+    lv_obj_set_height(cam_addr_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(cam_addr_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *cam_ip_col = lv_obj_create(cam_addr_row);
+    lv_obj_remove_style_all(cam_ip_col);
+    lv_obj_set_flex_flow(cam_ip_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(cam_ip_col, 2);
+    lv_obj_clear_flag(cam_ip_col, LV_OBJ_FLAG_SCROLLABLE);
+    make_field_label(cam_ip_col, "Địa chỉ IP camera");
+    s_cam_ip_ta = make_text_field(cam_ip_col, "Nhập IP camera...");
+    lv_textarea_set_text(s_cam_ip_ta, gst->camera_ip);
+    lv_obj_t *cam_port_col = lv_obj_create(cam_addr_row);
+    lv_obj_remove_style_all(cam_port_col);
+    lv_obj_set_flex_flow(cam_port_col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(cam_port_col, 1);
+    lv_obj_clear_flag(cam_port_col, LV_OBJ_FLAG_SCROLLABLE);
+    make_field_label(cam_port_col, "Cổng (HTTP)");
+    s_cam_port_ta = make_text_field(cam_port_col, "80");
+    char cam_port_buf[8]; snprintf(cam_port_buf, sizeof(cam_port_buf), "%u", (unsigned)gst->camera_port);
+    lv_textarea_set_text(s_cam_port_ta, cam_port_buf);
 
     make_field_label(card, "Tên đăng nhập");
-    make_text_field(card, "Tên đăng nhập camera...");
+    s_cam_user_ta = make_text_field(card, "Tên đăng nhập camera...");
+    lv_textarea_set_text(s_cam_user_ta, "admin");
 
     make_field_label(card, "Mật khẩu");
-    make_password_row(card, "Mật khẩu camera...");
+    s_cam_pass_ta = make_password_row(card, "Mật khẩu camera...");
+    lv_textarea_set_text(s_cam_pass_ta, "Vivoo@002");
+
+    lv_obj_t *cam_connect_btn = ui_common_button(card, "Kiểm tra kết nối Camera", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_set_width(cam_connect_btn, LV_PCT(100));
+    lv_obj_add_event_cb(cam_connect_btn, cam_connect_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *cam_note = lv_label_create(card);
+    lv_label_set_text(cam_note,
+        "Chỉ kiểm tra camera có phản hồi HTTP trên mạng (chưa đăng nhập).\n"
+        "Xem trực tiếp cần URL RTSP/ONVIF do Vivoo xác nhận — xem tab Cân.");
+    lv_label_set_long_mode(cam_note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(cam_note, LV_PCT(100));
+    lv_obj_set_style_text_font(cam_note, UI_FONT_XS, 0);
+    lv_obj_set_style_text_color(cam_note, UI_COLOR_BODY, 0);
+
+    lv_obj_t *gw_title = make_section_title(card, "GATEWAY — KẾT NỐI");
+    lv_obj_set_style_text_font(gw_title, UI_FONT_H5_BOLD, 0);
+    lv_obj_set_style_pad_top(gw_title, 4, 0);
 
     lv_obj_t *btn_row = lv_obj_create(card);
     lv_obj_remove_style_all(btn_row);
@@ -772,6 +842,16 @@ void ui_settings_tick(void)
         ? "Đã đồng bộ qua Internet (NTP)"
         : (app_state()->wifi_connected ? "Đang đồng bộ..." : "Chưa đồng bộ — mất kết nối Wi-Fi"));
     lv_obj_set_style_text_color(s_time_sync_label, synced ? UI_COLOR_SUCCESS : UI_COLOR_WARNING, 0);
+
+    /* Camera: phản ánh kết quả kiểm tra HTTP mới nhất (có thể đến từ lần tự
+     * kiểm tra lại định kỳ trong app_state_camera_sync(), không chỉ từ nút
+     * bấm ở màn này) — xem camera_client.c. */
+    if (s_cam_status_dot && s_cam_status_label) {
+        link_state_t cl = app_state()->camera_link;
+        bool checking = app_state_camera_is_checking();
+        lv_obj_set_style_bg_color(s_cam_status_dot, ui_common_link_color(cl), 0);
+        lv_label_set_text(s_cam_status_label, checking ? "Đang kiểm tra..." : (cl == LINK_OK ? "Đã kết nối" : "Chưa kết nối"));
+    }
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -890,7 +970,12 @@ void ui_settings_refresh(void)
     s_time_now_label = NULL;
     s_time_sync_label = NULL;
     s_cam_ip_ta = NULL;
+    s_cam_port_ta = NULL;
+    s_cam_user_ta = NULL;
+    s_cam_pass_ta = NULL;
     s_cam_list_host = NULL;
+    s_cam_status_dot = NULL;
+    s_cam_status_label = NULL;
     s_gw_ip_ta = NULL;
     s_gw_port_ta = NULL;
     s_gw_status_dot = NULL;

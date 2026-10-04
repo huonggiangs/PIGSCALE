@@ -123,7 +123,6 @@ LV_IMAGE_DECLARE(img_icon_lock);
 LV_IMAGE_DECLARE(img_icon_camera_off);
 LV_IMAGE_DECLARE(img_icon_wifi_signal);
 LV_IMAGE_DECLARE(img_logo_pig_weigh);
-LV_IMAGE_DECLARE(img_camera_01_frame);
 
 /* ────────────────────────────────────────────────────────────────────────
  * BỐ CỤC — canvas thiết kế gốc 800×1024, panel vật lý 800×1280.

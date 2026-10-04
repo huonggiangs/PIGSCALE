@@ -59,6 +59,15 @@ CONFIG_ETH_USE_SPI_ETHERNET=n
 # -- Experimental (MIPI-DSI yeu cau) ------------------------------------------
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y
 
+# -- esp_http_client: kiem tra ket noi camera Vivoo qua HTTPS -----------------
+# Camera dung chung thuc tu ky (self-signed, LAN noi bo) khong co CA de xac
+# thuc -> PHAI bo qua xac minh chung chi, neu khong esp-tls tu choi handshake
+# ngay tu buoc cau hinh (ESP_ERR_MBEDTLS_SSL_SETUP_FAILED, da xac nhan qua
+# log that khi thu ket noi camera_client.c). Chi dung cho LAN noi bo tin cay,
+# khong dung cho ket noi ra Internet.
+CONFIG_ESP_TLS_INSECURE=y
+CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY=y
+
 # -- NVS -----------------------------------------------------------------------
 CONFIG_NVS_ASSERT_ERROR_CHECK=n
 

@@ -14,8 +14,9 @@ static lv_obj_t *s_active_wrap;
 
 static lv_obj_t *s_order_title;
 static lv_obj_t *s_camera_wrap;
-static lv_obj_t *s_camera_lost_wrap;
-static lv_obj_t *s_camera_overlay_label;
+static lv_obj_t *s_camera_status_dot;   /* màu theo app_state()->camera_link — real-time */
+static lv_obj_t *s_camera_lost_wrap;    /* ghi chú tĩnh "xem trực tiếp chưa khả dụng" */
+static lv_obj_t *s_camera_overlay_label;  /* chữ trạng thái lớn: Đã/Chưa kết nối */
 
 static lv_obj_t *s_weight_value_label;
 static lv_obj_t *s_weight_status_label;
@@ -347,6 +348,13 @@ lv_obj_t *ui_weighing_create(lv_obj_t *parent)
     lv_obj_set_height(top_row, LV_SIZE_CONTENT);
     lv_obj_clear_flag(top_row, LV_OBJ_FLAG_SCROLLABLE);
 
+    /* Khung camera: trước đây hiện ẢNH TĨNH HARDCODE (img_camera_01_frame —
+     * một khung hình/"ảnh heo" giả lập cố định, không phải video thật) kèm
+     * dòng chữ "Đếm theo chiều dài thân · N heo" lấy từ số liệu mô phỏng
+     * (app_state_sim_tick cũ) — cả hai đều đã bỏ. Chưa có URL RTSP/ONVIF
+     * thật của camera Vivoo (xem network/camera_client.h) nên KHÔNG hiện
+     * video giả — chỉ hiện TRẠNG THÁI KẾT NỐI THẬT (real-time, cập nhật
+     * mỗi tick qua app_state()->camera_link — xem app_state_camera_sync). */
     s_camera_wrap = lv_obj_create(top_row);
     lv_obj_remove_style_all(s_camera_wrap);
     lv_obj_set_size(s_camera_wrap, 460, 259); /* 16:9 */
@@ -354,39 +362,24 @@ lv_obj_t *ui_weighing_create(lv_obj_t *parent)
     lv_obj_set_style_clip_corner(s_camera_wrap, true, 0);
     lv_obj_set_style_bg_color(s_camera_wrap, UI_COLOR_HEADING, 0);
     lv_obj_set_style_bg_opa(s_camera_wrap, LV_OPA_COVER, 0);
+    lv_obj_set_flex_flow(s_camera_wrap, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(s_camera_wrap, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(s_camera_wrap, 10, 0);
     lv_obj_clear_flag(s_camera_wrap, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *cam_img = lv_image_create(s_camera_wrap);
-    lv_image_set_src(cam_img, &img_camera_01_frame);
-    lv_obj_set_size(cam_img, 460, 259);
+    s_camera_status_dot = ui_common_status_dot(s_camera_wrap, LINK_LOST);
 
-    lv_obj_t *cam_caption_wrap = lv_obj_create(s_camera_wrap);
-    lv_obj_remove_style_all(cam_caption_wrap);
-    lv_obj_set_style_bg_color(cam_caption_wrap, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(cam_caption_wrap, LV_OPA_50, 0);
-    lv_obj_set_style_pad_hor(cam_caption_wrap, 8, 0);
-    lv_obj_set_style_pad_ver(cam_caption_wrap, 4, 0);
-    lv_obj_set_style_radius(cam_caption_wrap, 6, 0);
-    lv_obj_align(cam_caption_wrap, LV_ALIGN_BOTTOM_LEFT, 6, -6);
-    lv_obj_clear_flag(cam_caption_wrap, LV_OBJ_FLAG_SCROLLABLE);
-    s_camera_overlay_label = lv_label_create(cam_caption_wrap);
-    lv_obj_set_style_text_font(s_camera_overlay_label, UI_FONT_XS, 0);
+    s_camera_overlay_label = lv_label_create(s_camera_wrap);
+    lv_obj_set_style_text_font(s_camera_overlay_label, UI_FONT_H4_BOLD, 0);
     lv_obj_set_style_text_color(s_camera_overlay_label, lv_color_white(), 0);
 
-    s_camera_lost_wrap = lv_obj_create(s_camera_wrap);
-    lv_obj_remove_style_all(s_camera_lost_wrap);
-    lv_obj_set_size(s_camera_lost_wrap, 460, 259);
-    lv_obj_set_style_bg_color(s_camera_lost_wrap, UI_COLOR_HEADING, 0);
-    lv_obj_set_style_bg_opa(s_camera_lost_wrap, LV_OPA_COVER, 0);
-    lv_obj_set_flex_flow(s_camera_lost_wrap, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(s_camera_lost_wrap, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(s_camera_lost_wrap, 8, 0);
-    lv_obj_clear_flag(s_camera_lost_wrap, LV_OBJ_FLAG_SCROLLABLE);
-    ui_common_icon(s_camera_lost_wrap, &img_icon_camera_off, UI_COLOR_DANGER);
-    lv_obj_t *lost_lbl = lv_label_create(s_camera_lost_wrap);
-    lv_label_set_text(lost_lbl, "Mất kết nối camera");
-    lv_obj_set_style_text_color(lost_lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lost_lbl, UI_FONT_BODY_BOLD, 0);
+    s_camera_lost_wrap = lv_label_create(s_camera_wrap);
+    lv_label_set_long_mode(s_camera_lost_wrap, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_camera_lost_wrap, 380);
+    lv_obj_set_style_text_align(s_camera_lost_wrap, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(s_camera_lost_wrap, "Xem trực tiếp chưa khả dụng — cần URL RTSP/ONVIF do nhà sản xuất xác nhận");
+    lv_obj_set_style_text_font(s_camera_lost_wrap, UI_FONT_XS, 0);
+    lv_obj_set_style_text_color(s_camera_lost_wrap, UI_COLOR_ON_DARK_HINT, 0);
 
     lv_obj_t *stat_col = lv_obj_create(top_row);
     lv_obj_remove_style_all(stat_col);
@@ -499,14 +492,15 @@ void ui_weighing_refresh(void)
         lv_label_set_text(s_order_title, buf);
     }
 
-    if (w->camera_connected) {
-        lv_obj_add_flag(s_camera_lost_wrap, LV_OBJ_FLAG_HIDDEN);
-        int n = w->has_line_count ? w->line_count : 0;
-        snprintf(buf, sizeof(buf), "Đếm theo chiều dài thân · %d heo", n);
-        lv_label_set_text(s_camera_overlay_label, buf);
-    } else {
-        lv_obj_clear_flag(s_camera_lost_wrap, LV_OBJ_FLAG_HIDDEN);
-    }
+    /* Đọc TRỰC TIẾP app_state()->camera_link (không dùng w->camera_connected
+     * — đó chỉ là ảnh chụp trạng thái lúc BẮT ĐẦU phiên cân) để trạng thái
+     * hiển thị ở đây thật sự "real-time", theo đúng kết quả tự kiểm tra lại
+     * định kỳ của app_state_camera_sync(). */
+    link_state_t cam_link = app_state()->camera_link;
+    bool cam_checking = app_state_camera_is_checking();
+    lv_obj_set_style_bg_color(s_camera_status_dot, ui_common_link_color(cam_link), 0);
+    lv_label_set_text(s_camera_overlay_label, cam_checking ? "Đang kiểm tra..." :
+                       (cam_link == LINK_OK ? "Camera: Đã kết nối" : "Camera: Chưa kết nối"));
 
     ui_fmt_weight_kg(buf, sizeof(buf), w->weight_kg);
     char wbuf[sizeof(buf) + 8];
@@ -528,7 +522,7 @@ void ui_weighing_refresh(void)
         lv_label_set_text(s_snapshot_count_label, "--");
     }
 
-    bool device_lost = (w->p5_state == P5_STATE_LOST) || !w->camera_connected;
+    bool device_lost = (w->p5_state == P5_STATE_LOST) || (cam_link != LINK_OK);
     if (device_lost && !w->manual_mode) lv_obj_clear_flag(s_manual_btn, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(s_manual_btn, LV_OBJ_FLAG_HIDDEN);
 

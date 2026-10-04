@@ -245,8 +245,14 @@ typedef struct {
     /* liên kết thiết bị (mô phỏng) */
     link_state_t wifi_link;
     link_state_t p5_link;
-    link_state_t camera_link;
+    link_state_t camera_link;     /* THẬT — kết quả kiểm tra HTTP tới camera, xem camera_client.c */
     link_state_t gateway_link;    /* mặc định LINK_LOST — chỉ true sau khi bấm Kết nối */
+
+    /* Camera IP thật đang cấu hình (xem app_state_camera_test_connect) —
+     * dùng để tự kiểm tra lại định kỳ, hiển thị trạng thái "real-time". */
+    char camera_ip[40];
+    uint16_t camera_port;
+    int64_t camera_last_check_us;
 
     int pending_sync_count;       /* số phiếu đang chờ đồng bộ */
 
@@ -307,6 +313,10 @@ void app_state_wifi_scan(void);   /* wifi_manager_scan_start() thật qua ESP32-
 bool app_state_wifi_is_scanning(void);   /* để UI hiện "Đang quét..." + khoá nút */
 void app_state_wifi_connect(int idx, const char *pass);
 void app_state_select_station(int idx);
+
+/* ── Camera (kiểm tra kết nối HTTP thật — xem network/camera_client.h) ──── */
+void app_state_camera_test_connect(const char *ip, uint16_t port);
+bool app_state_camera_is_checking(void);
 
 /* ── Thời gian hệ thống (GMT+7 Việt Nam — xem main.c setenv TZ) ──────────── */
 bool app_state_time_is_synced(void);   /* đã có mốc giờ từ NTP lần nào chưa */

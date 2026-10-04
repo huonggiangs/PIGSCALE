@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include "esp_timer.h"
 #include "wifi_manager.h"
+#include "camera_client.h"
+
+/* Tự kiểm tra lại kết nối camera mỗi 20 giây (sau lần "Kết nối" đầu tiên từ
+ * Cài đặt) để trạng thái hiển thị ở header + tab Cân là "real-time", không
+ * phải chỉ kiểm tra 1 lần rồi đứng yên. */
+#define CAMERA_RECHECK_US  (20LL * 1000000LL)
 
 /* Chống dò PIN 4 số (tối đa 10.000 khả năng): khoá tạm 1 nhân viên sau quá
  * nhiều lần nhập sai LIÊN TIẾP. Dùng esp_timer_get_time() (đồng hồ đơn điệu
@@ -123,12 +129,18 @@ void app_state_init(void)
 
     s_state.wifi_link = LINK_OK;
     s_state.p5_link = LINK_OK;
-    s_state.camera_link = LINK_OK;
-    /* Gateway KHÔNG mặc định "đã kết nối" như các mục trên — trước đây
-     * card Gateway hiển thị "Đã tìm thấy thiết bị" CỐ ĐỊNH bất kể trạng
-     * thái thật (hardcode). Mặc định trung thực là LINK_LOST cho tới khi
-     * người dùng bấm "Kết nối" trong Cài đặt (xem gateway_check_cb). */
+    /* Gateway/Camera KHÔNG mặc định "đã kết nối" — trước đây hiển thị CỐ
+     * ĐỊNH bất kể trạng thái thật (hardcode). Mặc định trung thực là
+     * LINK_LOST cho tới khi có kiểm tra thật (xem gateway_check_cb,
+     * app_state_camera_test_connect/app_state_camera_sync). */
     s_state.gateway_link = LINK_LOST;
+    s_state.camera_link = LINK_LOST;
+    /* Camera Vivoo thật đã lắp cho trạm này (Web IP Camera, HTTP port 80 —
+     * xem docs camera Vivoo). Đây KHÔNG phải demo: điền sẵn làm cấu hình
+     * mặc định, vẫn sửa được ở Cài đặt. */
+    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "192.168.1.16");
+    s_state.camera_port = 80;
+    s_state.camera_last_check_us = 0;
 
     snprintf(s_state.fw_version, sizeof(s_state.fw_version), "v1.0.0-dev");
     snprintf(s_state.fw_build, sizeof(s_state.fw_build), "build 2026.09.27");
@@ -257,7 +269,11 @@ void app_state_start_weighing(const char *order_id)
     s_state.weighing.active = true;
     snprintf(s_state.weighing.order_id, sizeof(s_state.weighing.order_id), "%s", o->id);
     s_state.weighing.ticket_type = o->ticket_type;
-    s_state.weighing.p5_state = (s_state.p5_link == LINK_LOST) ? P5_STATE_LOST : P5_STATE_MOVING;
+    /* Chưa có giao thức Modbus-TCP thật nối P5 Scale (xem ui_settings.c) nên
+     * KHÔNG có nguồn khối lượng tự động nào — luôn bắt đầu ở MẤT KẾT NỐI để
+     * UI tự hiện nút "Nhập tay", thay vì giả lập p5_state=MOVING rồi
+     * app_state_sim_tick() tự tăng số lên như một cảm biến thật đang chạy. */
+    s_state.weighing.p5_state = P5_STATE_LOST;
     s_state.weighing.camera_connected = (s_state.camera_link != LINK_LOST);
     s_state.weighing.reconcile = RECONCILE_NONE;
 
@@ -367,39 +383,19 @@ void app_state_sync_now(void)
     s_state.pending_sync_count = 0;
 }
 
-/* ── Mô phỏng số liệu "sống" ─────────────────────────────────────────────── */
+/* ── Đồng bộ trạng thái mạng mỗi tick (KHÔNG còn giả lập khối lượng) ─────── */
 static void app_state_wifi_sync(void);
+static void app_state_camera_sync(void);
 
 void app_state_sim_tick(void)
 {
     app_state_wifi_sync();
-
-    weighing_session_t *w = &s_state.weighing;
-    if (w->active && !w->manual_mode && w->p5_state != P5_STATE_LOST) {
-        /* tăng dần khối lượng mô phỏng tới khi ổn định quanh kế hoạch */
-        order_t *o = app_state_find_order(w->order_id);
-        float target = o ? (o->planned_qty * 282.13f) : 1000.0f;
-        float step = target * 0.08f;
-        if (w->weight_kg < target) {
-            w->weight_kg += step;
-            w->p5_state = P5_STATE_MOVING;
-            if (w->weight_kg >= target) w->weight_kg = target;
-        } else {
-            w->p5_state = P5_STATE_STABLE;
-            if (!w->has_line_count && o) {
-                w->has_line_count = true;
-                w->line_count = o->planned_qty;
-            }
-            if (!w->has_snapshot_count && o) {
-                w->has_snapshot_count = true;
-                /* mô phỏng lệch nhẹ đôi khi để minh hoạ trạng thái LỆCH/CHƯA CHẮC */
-                w->snapshot_count = o->planned_qty;
-            }
-            if (w->has_line_count && w->has_snapshot_count) {
-                w->reconcile = (w->line_count == w->snapshot_count) ? RECONCILE_MATCH : RECONCILE_MISMATCH;
-            }
-        }
-    }
+    app_state_camera_sync();
+    /* Trước đây có khối tự tăng w->weight_kg tới mục tiêu giả định
+     * (planned_qty * 282.13f) mỗi tick, giả vờ như P5 Scale thật đang gửi
+     * số lên — đã bỏ. Chưa có Modbus-TCP client thật (xem ui_settings.c)
+     * nên khối lượng CHỈ đến từ app_state_weighing_manual_input() (Nhập
+     * tay) cho tới khi có tích hợp P5 Scale thật. */
 }
 
 /* ── Cảnh báo ────────────────────────────────────────────────────────────── */
@@ -582,6 +578,39 @@ bool app_state_time_is_synced(void)
 void app_state_time_force_sync(void)
 {
     wifi_manager_force_ntp_sync();
+}
+
+void app_state_camera_test_connect(const char *ip, uint16_t port)
+{
+    if (!ip || !ip[0]) return;
+    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "%s", ip);
+    s_state.camera_port = port;
+    s_state.camera_last_check_us = esp_timer_get_time();
+    camera_client_test_async(ip, port);
+}
+
+bool app_state_camera_is_checking(void)
+{
+    return camera_client_is_busy();
+}
+
+/* Đọc kết quả lần kiểm tra gần nhất + tự kiểm tra lại định kỳ (20s) để trạng
+ * thái camera hiển thị ở header và tab Cân luôn "real-time", không chỉ đứng
+ * yên sau lần bấm "Kết nối" đầu tiên. */
+static void app_state_camera_sync(void)
+{
+    if (!camera_client_is_busy()) {
+        camera_check_result_t r = camera_client_get_result();
+        if (r == CAMERA_CHECK_REACHABLE) s_state.camera_link = LINK_OK;
+        else if (r == CAMERA_CHECK_UNREACHABLE) s_state.camera_link = LINK_LOST;
+
+        int64_t now = esp_timer_get_time();
+        if (s_state.camera_ip[0] &&
+            (now - s_state.camera_last_check_us) >= CAMERA_RECHECK_US) {
+            s_state.camera_last_check_us = now;
+            camera_client_test_async(s_state.camera_ip, s_state.camera_port);
+        }
+    }
 }
 
 static void app_state_wifi_sync(void)
