@@ -187,6 +187,11 @@ static void open_manual_modal(void)
     s_manual_kb = lv_keyboard_create(box);
     lv_keyboard_set_mode(s_manual_kb, LV_KEYBOARD_MODE_NUMBER);
     lv_obj_set_height(s_manual_kb, 160);
+    /* lv_keyboard mặc định dùng font built-in LVGL (~14px) cho chữ trên
+     * phím — nhỏ hẳn so với phần còn lại của UI. Bàn phím số có ít phím,
+     * mỗi phím rộng hơn hẳn bàn phím chữ QWERTY nên chọn font lớn hơn
+     * nhiều (gần x3 so với mặc định 14px) mà vẫn không tràn phím. */
+    lv_obj_set_style_text_font(s_manual_kb, UI_FONT_H1_BOLD, 0);
     lv_obj_add_event_cb(s_manual_kb, manual_kb_event_cb, LV_EVENT_ALL, NULL);
     lv_keyboard_set_textarea(s_manual_kb, s_manual_weight_ta);
 }

@@ -128,11 +128,12 @@ void app_state_init(void)
     s_state.bright_mode = false;
 
     s_state.wifi_link = LINK_OK;
-    s_state.p5_link = LINK_OK;
-    /* Gateway/Camera KHÔNG mặc định "đã kết nối" — trước đây hiển thị CỐ
-     * ĐỊNH bất kể trạng thái thật (hardcode). Mặc định trung thực là
-     * LINK_LOST cho tới khi có kiểm tra thật (xem gateway_check_cb,
+    /* P5 Scale/Gateway/Camera KHÔNG mặc định "đã kết nối" — trước đây
+     * header hiện CỐ ĐỊNH trạng thái Online (chấm xanh) bất kể có kết nối
+     * thật hay chưa (hardcode). Mặc định trung thực là LINK_LOST cho tới
+     * khi có kiểm tra/kết nối thật (xem p5_connect_cb, gateway_check_cb,
      * app_state_camera_test_connect/app_state_camera_sync). */
+    s_state.p5_link = LINK_LOST;
     s_state.gateway_link = LINK_LOST;
     s_state.camera_link = LINK_LOST;
     /* Camera Vivoo thật đã lắp cho trạm này (Web IP Camera, HTTPS cổng 80 —
@@ -313,7 +314,10 @@ void app_state_weighing_reweigh(void)
     w->reconcile = RECONCILE_NONE;
     w->manual_mode = false;
     w->manual_filled = false;
-    if (s_state.p5_link != LINK_LOST) w->p5_state = P5_STATE_MOVING;
+    /* Chưa có Modbus-TCP thật (xem app_state_start_weighing) nên KHÔNG tự
+     * đặt lại "ĐANG ĐỘNG" dù p5_link đã bấm Kết nối — vẫn trung thực là
+     * MẤT KẾT NỐI cho tới khi có tích hợp thật. */
+    w->p5_state = P5_STATE_LOST;
 }
 
 bool app_state_weighing_can_confirm(void)

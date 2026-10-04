@@ -90,6 +90,11 @@ static void open_cancel_modal(const char *receipt_no, const char *order_code)
 
     s_cancel_kb = lv_keyboard_create(box);
     lv_obj_set_height(s_cancel_kb, 150);
+    /* lv_keyboard mặc định dùng font built-in của LVGL (~14px, KHÔNG phải
+     * font Inter đã phóng 1.5x của app) cho chữ trên các phím — nhỏ hẳn so
+     * với phần còn lại của UI. Đặt font lớn hơn hẳn cho dễ bấm; bàn phím
+     * chữ (nhiều phím/hàng) chọn size vừa đủ để không tràn phím. */
+    lv_obj_set_style_text_font(s_cancel_kb, UI_FONT_H4_BOLD, 0);
     lv_keyboard_set_textarea(s_cancel_kb, s_cancel_reason_ta);
 }
 
@@ -259,6 +264,9 @@ lv_obj_t *ui_history_create(lv_obj_t *parent)
 
     s_search_kb = lv_keyboard_create(lv_obj_get_parent(s_container));
     lv_obj_set_height(s_search_kb, 200);
+    /* Cùng lỗi font nhỏ như bàn phím Huỷ phiếu — bàn phím này rộng cả màn
+     * hình (không phải modal 480px) nên chọn font lớn hơn, vẫn an toàn. */
+    lv_obj_set_style_text_font(s_search_kb, UI_FONT_H3_BOLD, 0);
     lv_obj_align(s_search_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(s_search_kb, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_search_kb);

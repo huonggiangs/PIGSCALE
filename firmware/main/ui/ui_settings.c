@@ -16,6 +16,12 @@ static lv_obj_t *s_kb;     /* bàn phím dùng chung cho các ô nhập (mật k
                              * Gateway, tài khoản/mật khẩu Camera & P5 Scale) — cùng mẫu
                              * với ô tìm kiếm ở ui_history.c */
 static bool s_wifi_show_all;   /* true = hiện đủ danh sách; false = thu gọn khi đã kết nối */
+static bool s_wifi_was_scanning;  /* phát hiện lúc quét VỪA xong để tự vẽ lại danh sách —
+                                     xem ui_settings_tick(). Trước đây không có, nên sau khi
+                                     quét xong (thật ra chỉ ~2-3s, đã đo qua log) màn hình
+                                     vẫn đứng yên ở "Đang quét..." cho tới khi người dùng vô
+                                     tình làm gì khác kích hoạt vẽ lại — CẢM GIÁC như quét
+                                     rất chậm dù backend đã xong từ lâu. */
 
 /* ── Gateway: tìm camera trong mạng ──────────────────────────────────────── */
 static lv_obj_t *s_cam_ip_ta;      /* ô "Địa chỉ IP camera" — Chọn từ danh sách tìm được sẽ điền vào đây */
@@ -827,6 +833,18 @@ void ui_settings_tick(void)
 {
     if (!s_time_now_label || !s_time_sync_label) return;
 
+    /* WiFi vừa quét xong (quá trình thật chỉ ~2-3s, đã đo qua log — KHÔNG
+     * chậm) -> tự vẽ lại ngay để hiện danh sách mới, thay vì đứng yên ở
+     * "Đang quét..." tới khi người dùng vô tình làm gì khác kích hoạt vẽ
+     * lại (đây là nguyên nhân thật gây cảm giác "quét rất chậm"). */
+    bool scanning_now = app_state_wifi_is_scanning();
+    if (s_wifi_was_scanning && !scanning_now) {
+        s_wifi_was_scanning = false;
+        ui_settings_refresh();
+        return;
+    }
+    s_wifi_was_scanning = scanning_now;
+
     time_t now = time(NULL);
     struct tm tmv;
     localtime_r(&now, &tmv);
@@ -956,6 +974,10 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
 
     s_kb = lv_keyboard_create(lv_obj_get_parent(s_container));
     lv_obj_set_height(s_kb, 200);
+    /* lv_keyboard mặc định dùng font built-in LVGL (~14px) cho chữ trên
+     * phím — nhỏ hẳn so với phần còn lại của UI đã phóng 1.5x. Bàn phím
+     * này rộng cả màn hình nên dùng font lớn vẫn an toàn. */
+    lv_obj_set_style_text_font(s_kb, UI_FONT_H3_BOLD, 0);
     lv_obj_align(s_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_kb);
