@@ -110,3 +110,11 @@ CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_18=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
+# 28/40: dung rieng cho chu tren lv_keyboard (xem ui_history.c/ui_settings.c/
+# ui_weighing.c) — PHAI dung font Montserrat builtin (co san glyph
+# LV_SYMBOL_* nhu backspace/enter), KHONG dung font Inter tu bien cua app
+# (chi co chu Latin+Viet, khong co dai ky hieu) — neu dung Inter cho ban
+# phim, cac phim dac biet (Backspace/Enter/Shift) hien thanh o chu nhat
+# dung (tofu, thieu glyph) thay vi icon dung.
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_40=y

@@ -51,7 +51,7 @@ static void open_cancel_modal(const char *receipt_no, const char *order_code)
 {
     snprintf(s_cancel_receipt, sizeof(s_cancel_receipt), "%s", receipt_no);
 
-    lv_obj_t *box = ui_common_modal_open(&s_cancel_overlay, 480, 460);
+    lv_obj_t *box = ui_common_modal_open(&s_cancel_overlay, 700, 760);
     lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(box, 10, 0);
 
@@ -89,12 +89,18 @@ static void open_cancel_modal(const char *receipt_no, const char *order_code)
     lv_obj_add_event_cb(ok_btn, cancel_confirm_cb, LV_EVENT_CLICKED, NULL);
 
     s_cancel_kb = lv_keyboard_create(box);
-    lv_obj_set_height(s_cancel_kb, 150);
-    /* lv_keyboard mặc định dùng font built-in của LVGL (~14px, KHÔNG phải
-     * font Inter đã phóng 1.5x của app) cho chữ trên các phím — nhỏ hẳn so
-     * với phần còn lại của UI. Đặt font lớn hơn hẳn cho dễ bấm; bàn phím
-     * chữ (nhiều phím/hàng) chọn size vừa đủ để không tràn phím. */
-    lv_obj_set_style_text_font(s_cancel_kb, UI_FONT_H4_BOLD, 0);
+    lv_obj_set_height(s_cancel_kb, 340);
+    /* lv_keyboard mặc định dùng font built-in LVGL cỡ nhỏ (~14px) — đã thử
+     * đổi sang font Inter tự biên của app (phóng 1.5x) nhưng font đó
+     * KHÔNG có dải ký tự LV_SYMBOL_* (icon Backspace/Enter/Shift...) nên
+     * các phím đặc biệt hiện thành ô chữ nhật đứng trống (thiếu glyph —
+     * "tofu"). Phải dùng font Montserrat BUILT-IN của LVGL (luôn có đủ
+     * glyph + icon) thay vì font Inter cho riêng bàn phím. Tăng luôn chiều
+     * cao khung bàn phím + khoảng cách giữa phím để ô bao quanh phím to
+     * cân đối với chữ, không chỉ chữ to mà ô vẫn nhỏ như trước. */
+    lv_obj_set_style_text_font(s_cancel_kb, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_pad_row(s_cancel_kb, 8, 0);
+    lv_obj_set_style_pad_column(s_cancel_kb, 6, 0);
     lv_keyboard_set_textarea(s_cancel_kb, s_cancel_reason_ta);
 }
 
@@ -263,10 +269,15 @@ lv_obj_t *ui_history_create(lv_obj_t *parent)
     lv_obj_clear_flag(s_audit_host, LV_OBJ_FLAG_SCROLLABLE);
 
     s_search_kb = lv_keyboard_create(lv_obj_get_parent(s_container));
-    lv_obj_set_height(s_search_kb, 200);
-    /* Cùng lỗi font nhỏ như bàn phím Huỷ phiếu — bàn phím này rộng cả màn
-     * hình (không phải modal 480px) nên chọn font lớn hơn, vẫn an toàn. */
-    lv_obj_set_style_text_font(s_search_kb, UI_FONT_H3_BOLD, 0);
+    lv_obj_set_height(s_search_kb, 320);
+    /* Font Inter tự biên của app KHÔNG có dải LV_SYMBOL_* (icon Backspace/
+     * Enter...) nên phím đặc biệt sẽ hiện ô chữ nhật đứng trống (tofu) nếu
+     * dùng font đó cho bàn phím — phải dùng Montserrat BUILT-IN (đủ glyph +
+     * icon). Bàn phím rộng cả màn hình nên dùng size lớn (40px) vẫn vừa.
+     * Tăng khoảng cách giữa phím để ô bao quanh phím cân đối với chữ. */
+    lv_obj_set_style_text_font(s_search_kb, &lv_font_montserrat_40, 0);
+    lv_obj_set_style_pad_row(s_search_kb, 10, 0);
+    lv_obj_set_style_pad_column(s_search_kb, 8, 0);
     lv_obj_align(s_search_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(s_search_kb, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_search_kb);

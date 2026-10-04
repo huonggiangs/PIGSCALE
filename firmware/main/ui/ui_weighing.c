@@ -149,7 +149,7 @@ static void manual_ta_focus_cb(lv_event_t *e)
 
 static void open_manual_modal(void)
 {
-    lv_obj_t *box = ui_common_modal_open(&s_manual_overlay, 480, 520);
+    lv_obj_t *box = ui_common_modal_open(&s_manual_overlay, 560, 700);
     lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(box, 12, 0);
 
@@ -186,12 +186,16 @@ static void open_manual_modal(void)
 
     s_manual_kb = lv_keyboard_create(box);
     lv_keyboard_set_mode(s_manual_kb, LV_KEYBOARD_MODE_NUMBER);
-    lv_obj_set_height(s_manual_kb, 160);
-    /* lv_keyboard mặc định dùng font built-in LVGL (~14px) cho chữ trên
-     * phím — nhỏ hẳn so với phần còn lại của UI. Bàn phím số có ít phím,
-     * mỗi phím rộng hơn hẳn bàn phím chữ QWERTY nên chọn font lớn hơn
-     * nhiều (gần x3 so với mặc định 14px) mà vẫn không tràn phím. */
-    lv_obj_set_style_text_font(s_manual_kb, UI_FONT_H1_BOLD, 0);
+    lv_obj_set_height(s_manual_kb, 340);
+    /* Font Inter tự biên của app KHÔNG có dải LV_SYMBOL_* (icon Backspace/
+     * Enter...) nên phím đặc biệt sẽ hiện ô chữ nhật đứng trống (tofu) nếu
+     * dùng cho bàn phím — phải dùng Montserrat BUILT-IN. Bàn phím số có ít
+     * phím, mỗi phím rộng hơn hẳn QWERTY nên dùng size 48px (lớn nhất đã
+     * bật) vẫn vừa thoải mái. Tăng khoảng cách giữa phím để ô bao quanh
+     * phím to cân đối với chữ, không chỉ chữ to mà ô vẫn nhỏ như trước. */
+    lv_obj_set_style_text_font(s_manual_kb, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_pad_row(s_manual_kb, 10, 0);
+    lv_obj_set_style_pad_column(s_manual_kb, 8, 0);
     lv_obj_add_event_cb(s_manual_kb, manual_kb_event_cb, LV_EVENT_ALL, NULL);
     lv_keyboard_set_textarea(s_manual_kb, s_manual_weight_ta);
 }

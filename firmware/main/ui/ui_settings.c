@@ -973,11 +973,15 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     lv_obj_clear_flag(s_host, LV_OBJ_FLAG_SCROLLABLE);
 
     s_kb = lv_keyboard_create(lv_obj_get_parent(s_container));
-    lv_obj_set_height(s_kb, 200);
-    /* lv_keyboard mặc định dùng font built-in LVGL (~14px) cho chữ trên
-     * phím — nhỏ hẳn so với phần còn lại của UI đã phóng 1.5x. Bàn phím
-     * này rộng cả màn hình nên dùng font lớn vẫn an toàn. */
-    lv_obj_set_style_text_font(s_kb, UI_FONT_H3_BOLD, 0);
+    lv_obj_set_height(s_kb, 320);
+    /* Font Inter tự biên của app KHÔNG có dải LV_SYMBOL_* (icon Backspace/
+     * Enter...) nên phím đặc biệt sẽ hiện ô chữ nhật đứng trống (tofu) nếu
+     * dùng cho bàn phím — phải dùng Montserrat BUILT-IN. Bàn phím rộng cả
+     * màn hình nên size 40px vẫn vừa. Tăng khoảng cách giữa phím để ô bao
+     * quanh phím to cân đối với chữ. */
+    lv_obj_set_style_text_font(s_kb, &lv_font_montserrat_40, 0);
+    lv_obj_set_style_pad_row(s_kb, 10, 0);
+    lv_obj_set_style_pad_column(s_kb, 8, 0);
     lv_obj_align(s_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_kb);
