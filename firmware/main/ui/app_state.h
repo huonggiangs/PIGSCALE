@@ -248,6 +248,15 @@ typedef struct {
     link_state_t camera_link;     /* THẬT — kết quả kiểm tra HTTP tới camera, xem camera_client.c */
     link_state_t gateway_link;    /* mặc định LINK_LOST — chỉ true sau khi bấm Kết nối */
 
+    /* IP tĩnh cho WiFi của THIẾT BỊ (không phải địa chỉ Gateway/Camera) —
+     * mặc định DHCP (wifi_static_en=false). THẬT — áp dụng qua
+     * wifi_manager (xem app_state_wifi_set_static_ip). */
+    bool wifi_static_en;
+    char wifi_static_ip[16];
+    char wifi_static_netmask[16];
+    char wifi_static_gateway[16];
+    char wifi_static_dns[16];
+
     /* Camera IP thật đang cấu hình (xem app_state_camera_test_connect) —
      * dùng để tự kiểm tra lại định kỳ, hiển thị trạng thái "real-time". */
     char camera_ip[40];
@@ -313,6 +322,12 @@ void app_state_wifi_scan(void);   /* wifi_manager_scan_start() thật qua ESP32-
 bool app_state_wifi_is_scanning(void);   /* để UI hiện "Đang quét..." + khoá nút */
 void app_state_wifi_connect(int idx, const char *pass);
 void app_state_select_station(int idx);
+
+/** Lưu + áp dụng cấu hình IP tĩnh cho WiFi (netmask/gateway/dns có thể "" để
+ *  dùng mặc định). Trả false nếu bật IP tĩnh nhưng địa chỉ IP trống/sai
+ *  định dạng (không lưu). Giá trị đọc lại qua app_state()->wifi_static_*. */
+bool app_state_wifi_set_static_ip(bool enabled, const char *ip, const char *netmask,
+                                   const char *gateway, const char *dns);
 
 /* ── Camera (kiểm tra kết nối HTTP thật — xem network/camera_client.h) ──── */
 void app_state_camera_test_connect(const char *ip, uint16_t port);

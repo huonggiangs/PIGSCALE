@@ -69,6 +69,27 @@ bool wifi_manager_is_time_synced(void);
  *  (SNTP chưa init) hoặc đang mất mạng. */
 void wifi_manager_force_ntp_sync(void);
 
+/* ── Địa chỉ IP tĩnh ──────────────────────────────────────────────────────
+ * Mặc định DHCP (enabled=false). Khi bật, tắt DHCP client trên netif và tự
+ * gán ip/netmask/gw/dns — áp dụng ngay lúc WIFI_EVENT_STA_CONNECTED (trước
+ * khi DHCP kịp chạy), theo đúng mẫu "static_ip" chính thức của ESP-IDF.
+ * Lưu NVS nên giữ qua reboot. */
+typedef struct {
+    bool enabled;
+    char ip[16];        /* "192.168.1.50" */
+    char netmask[16];   /* "255.255.255.0" */
+    char gateway[16];   /* "192.168.1.1" */
+    char dns[16];       /* "8.8.8.8" */
+} wifi_static_ip_cfg_t;
+
+/** Lưu cấu hình IP tĩnh vào NVS + áp dụng ngay nếu đang/sắp kết nối.
+ *  Chuỗi rỗng ("") ở netmask/gateway/dns dùng giá trị mặc định hợp lý
+ *  (netmask 255.255.255.0, không set gateway/dns nếu rỗng). */
+esp_err_t wifi_manager_set_static_ip(const wifi_static_ip_cfg_t *cfg);
+
+/** Đọc cấu hình IP tĩnh hiện tại (đã nạp từ NVS lúc khởi động hoặc vừa set). */
+void wifi_manager_get_static_ip(wifi_static_ip_cfg_t *out);
+
 #ifdef __cplusplus
 }
 #endif

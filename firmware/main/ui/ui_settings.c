@@ -23,6 +23,10 @@ static bool s_wifi_was_scanning;  /* phát hiện lúc quét VỪA xong để t�
                                      tình làm gì khác kích hoạt vẽ lại — CẢM GIÁC như quét
                                      rất chậm dù backend đã xong từ lâu. */
 
+/* ── IP tĩnh cho WiFi của thiết bị ─────────────────────────────────────────── */
+static lv_obj_t *s_ip_fields_wrap;
+static lv_obj_t *s_ip_addr_ta, *s_ip_nm_ta, *s_ip_gw_ta, *s_ip_dns_ta;
+
 /* ── Gateway: tìm camera trong mạng ──────────────────────────────────────── */
 static lv_obj_t *s_cam_ip_ta;      /* ô "Địa chỉ IP camera" — Chọn từ danh sách tìm được sẽ điền vào đây */
 static lv_obj_t *s_cam_port_ta;
@@ -276,6 +280,91 @@ static void build_wifi_section(lv_obj_t *host)
     lv_obj_t *connect_btn = ui_common_button(card, "KẾT NỐI", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
     lv_obj_set_width(connect_btn, LV_PCT(100));
     lv_obj_add_event_cb(connect_btn, wifi_connect_submit_cb, LV_EVENT_CLICKED, NULL);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * ĐỊA CHỈ IP (IP tĩnh cho WiFi của thiết bị) — THẬT, xem wifi_manager.c
+ * ──────────────────────────────────────────────────────────────────────── */
+static void ip_static_switch_cb(lv_event_t *e)
+{
+    lv_obj_t *sw = lv_event_get_target(e);
+    bool on = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    /* Ẩn/hiện tại chỗ (không ui_settings_refresh) để không mất nội dung
+     * đang gõ dở ở các card khác — cùng cách printer preview toggle đang
+     * làm với s_print_preview. */
+    if (!s_ip_fields_wrap) return;
+    if (on) lv_obj_clear_flag(s_ip_fields_wrap, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(s_ip_fields_wrap, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void ip_static_save_cb(lv_event_t *e)
+{
+    lv_obj_t *sw = (lv_obj_t *)lv_event_get_user_data(e);
+    bool enabled = sw && lv_obj_has_state(sw, LV_STATE_CHECKED);
+    const char *ip  = s_ip_addr_ta ? lv_textarea_get_text(s_ip_addr_ta) : "";
+    const char *nm  = s_ip_nm_ta   ? lv_textarea_get_text(s_ip_nm_ta)   : "";
+    const char *gw  = s_ip_gw_ta   ? lv_textarea_get_text(s_ip_gw_ta)   : "";
+    const char *dns = s_ip_dns_ta  ? lv_textarea_get_text(s_ip_dns_ta)  : "";
+
+    if (!app_state_wifi_set_static_ip(enabled, ip, nm, gw, dns)) {
+        ui_shell_toast("Địa chỉ IP không hợp lệ — kiểm tra lại");
+        return;
+    }
+    ui_shell_toast(enabled ? "Đã lưu IP tĩnh — đang áp dụng lại kết nối..."
+                            : "Đã chuyển về DHCP tự động");
+}
+
+static void build_static_ip_section(lv_obj_t *host)
+{
+    app_state_t *st = app_state();
+    lv_obj_t *card = ui_common_card(host);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(card, 10, 0);
+
+    make_section_title(card, "ĐỊA CHỈ IP");
+
+    lv_obj_t *sw_row = lv_obj_create(card);
+    lv_obj_remove_style_all(sw_row);
+    lv_obj_set_flex_flow(sw_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(sw_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_width(sw_row, LV_PCT(100));
+    lv_obj_set_height(sw_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(sw_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *sw_label = make_field_label(sw_row, "Dùng địa chỉ IP tĩnh (tắt = DHCP tự động)");
+    lv_obj_set_style_text_color(sw_label, UI_COLOR_HEADING, 0);
+    lv_obj_t *sw = lv_switch_create(sw_row);
+    lv_obj_set_style_bg_color(sw, UI_COLOR_PRIMARY, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (st->wifi_static_en) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, ip_static_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    s_ip_fields_wrap = lv_obj_create(card);
+    lv_obj_remove_style_all(s_ip_fields_wrap);
+    lv_obj_set_flex_flow(s_ip_fields_wrap, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(s_ip_fields_wrap, 8, 0);
+    lv_obj_set_width(s_ip_fields_wrap, LV_PCT(100));
+    lv_obj_set_height(s_ip_fields_wrap, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(s_ip_fields_wrap, LV_OBJ_FLAG_SCROLLABLE);
+    if (!st->wifi_static_en) lv_obj_add_flag(s_ip_fields_wrap, LV_OBJ_FLAG_HIDDEN);
+
+    make_field_label(s_ip_fields_wrap, "Địa chỉ IP");
+    s_ip_addr_ta = make_text_field(s_ip_fields_wrap, "Ví dụ: 192.168.1.50");
+    if (st->wifi_static_ip[0]) lv_textarea_set_text(s_ip_addr_ta, st->wifi_static_ip);
+
+    make_field_label(s_ip_fields_wrap, "Subnet Mask");
+    s_ip_nm_ta = make_text_field(s_ip_fields_wrap, "255.255.255.0");
+    lv_textarea_set_text(s_ip_nm_ta, st->wifi_static_netmask[0] ? st->wifi_static_netmask : "255.255.255.0");
+
+    make_field_label(s_ip_fields_wrap, "Gateway");
+    s_ip_gw_ta = make_text_field(s_ip_fields_wrap, "Ví dụ: 192.168.1.1");
+    if (st->wifi_static_gateway[0]) lv_textarea_set_text(s_ip_gw_ta, st->wifi_static_gateway);
+
+    make_field_label(s_ip_fields_wrap, "DNS");
+    s_ip_dns_ta = make_text_field(s_ip_fields_wrap, "Ví dụ: 8.8.8.8");
+    if (st->wifi_static_dns[0]) lv_textarea_set_text(s_ip_dns_ta, st->wifi_static_dns);
+
+    lv_obj_t *save_btn = ui_common_button(card, "Lưu địa chỉ IP", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_set_width(save_btn, LV_PCT(100));
+    lv_obj_add_event_cb(save_btn, ip_static_save_cb, LV_EVENT_CLICKED, sw);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -995,6 +1084,11 @@ void ui_settings_refresh(void)
     s_print_preview = NULL;
     s_time_now_label = NULL;
     s_time_sync_label = NULL;
+    s_ip_fields_wrap = NULL;
+    s_ip_addr_ta = NULL;
+    s_ip_nm_ta = NULL;
+    s_ip_gw_ta = NULL;
+    s_ip_dns_ta = NULL;
     s_cam_ip_ta = NULL;
     s_cam_port_ta = NULL;
     s_cam_user_ta = NULL;
@@ -1024,6 +1118,7 @@ void ui_settings_refresh(void)
     }
 
     build_wifi_section(s_host);
+    build_static_ip_section(s_host);
     build_gateway_section(s_host);
     build_p5_section(s_host);
     build_printer_section(s_host);

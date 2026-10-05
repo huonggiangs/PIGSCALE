@@ -23,6 +23,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
+#include "lwip/ip4_addr.h"   /* ipaddr_addr() — theo đúng mẫu static_ip chính thức của ESP-IDF */
 #include "nvs.h"
 
 static const char *TAG = "WIFI";
@@ -49,6 +50,9 @@ static volatile int8_t   s_rssi         = -100;    /* RSSI cache (cập nhật k
 static int               s_retry        = 0;
 static bool              s_sntp_init    = false;   /* SNTP đã khởi tạo chưa */
 static volatile bool     s_time_synced  = false;   /* đã nhận >=1 lần đồng bộ NTP */
+
+static wifi_static_ip_cfg_t s_static_ip  = {0};    /* enabled=false mặc định (DHCP) */
+static bool                  s_dhcp_stopped = false; /* theo dõi để biết lúc nào cần bật lại dhcpc */
 
 /* Giờ hệ thống = UTC; localtime() áp TZ="ICT-7" (set cố định ở main.c lúc
  * boot — thiết bị chỉ dùng ở Việt Nam) → đồng hồ hiển thị đúng GMT+7. */
@@ -83,6 +87,44 @@ static void safe_copy(char *dst, size_t dst_size, const char *src)
     dst[len] = '\0';
 }
 
+/* Gán IP tĩnh (hoặc trả về DHCP) trên netif STA — gọi lúc
+ * WIFI_EVENT_STA_CONNECTED (đã liên kết AP, CHƯA xin DHCP) đúng theo mẫu
+ * "static_ip" chính thức của ESP-IDF (examples/protocols/static_ip):
+ * tắt dhcp client trước khi nó kịp chạy, tự gán ip/netmask/gw/dns bằng
+ * esp_netif_set_ip_info()/set_dns_info() — IP_EVENT_STA_GOT_IP vẫn nổ ra
+ * bình thường cho cả 2 trường hợp (static lẫn DHCP) nên không cần sửa gì
+ * thêm ở handler GOT_IP sẵn có bên dưới. */
+static void apply_ip_config(void)
+{
+    if (!s_netif) return;
+    if (s_static_ip.enabled && s_static_ip.ip[0]) {
+        if (esp_netif_dhcpc_stop(s_netif) != ESP_OK) {
+            ESP_LOGW(TAG, "Khong tat duoc dhcp client (co the da tat)");
+        }
+        esp_netif_ip_info_t info = {0};
+        info.ip.addr = ipaddr_addr(s_static_ip.ip);
+        info.netmask.addr = s_static_ip.netmask[0] ? ipaddr_addr(s_static_ip.netmask)
+                                                     : ipaddr_addr("255.255.255.0");
+        if (s_static_ip.gateway[0]) info.gw.addr = ipaddr_addr(s_static_ip.gateway);
+        if (esp_netif_set_ip_info(s_netif, &info) != ESP_OK) {
+            ESP_LOGE(TAG, "Gan IP tinh that bai (%s)", s_static_ip.ip);
+            return;
+        }
+        if (s_static_ip.dns[0]) {
+            esp_netif_dns_info_t dns = {0};
+            dns.ip.type = ESP_IPADDR_TYPE_V4;
+            dns.ip.u_addr.ip4.addr = ipaddr_addr(s_static_ip.dns);
+            esp_netif_set_dns_info(s_netif, ESP_NETIF_DNS_MAIN, &dns);
+        }
+        s_dhcp_stopped = true;
+        ESP_LOGI(TAG, "Da gan IP tinh: %s / %s / gw %s", s_static_ip.ip, s_static_ip.netmask, s_static_ip.gateway);
+    } else if (s_dhcp_stopped) {
+        esp_netif_dhcpc_start(s_netif);
+        s_dhcp_stopped = false;
+        ESP_LOGI(TAG, "Quay lai DHCP tu dong");
+    }
+}
+
 static uint8_t rssi_to_bars(int8_t rssi)
 {
     if (rssi >= -55) return 4;
@@ -107,6 +149,7 @@ static void wifi_evt(void *arg, esp_event_base_t base, int32_t id, void *data)
 
         case WIFI_EVENT_STA_CONNECTED:
             ESP_LOGI(TAG, "Associated, chờ IP...");
+            apply_ip_config();   /* trước khi DHCP (nếu có) kịp chạy */
             break;
 
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -183,6 +226,21 @@ static void wifi_init_task(void *arg)
         nvs_close(h);
     }
 
+    /* 1b. Nạp cấu hình IP tĩnh đã lưu (nếu có) — áp dụng thật lúc
+     * WIFI_EVENT_STA_CONNECTED (xem apply_ip_config()), ở đây chỉ nạp vào
+     * s_static_ip để sẵn sàng. */
+    if (nvs_open(WIFI_NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        uint8_t en = 0;
+        if (nvs_get_u8(h, "ip_en", &en) == ESP_OK) s_static_ip.enabled = (en != 0);
+        size_t sz;
+        sz = sizeof(s_static_ip.ip);       nvs_get_str(h, "ip_addr", s_static_ip.ip, &sz);
+        sz = sizeof(s_static_ip.netmask);  nvs_get_str(h, "ip_nm",   s_static_ip.netmask, &sz);
+        sz = sizeof(s_static_ip.gateway);  nvs_get_str(h, "ip_gw",   s_static_ip.gateway, &sz);
+        sz = sizeof(s_static_ip.dns);      nvs_get_str(h, "ip_dns",  s_static_ip.dns, &sz);
+        nvs_close(h);
+        if (s_static_ip.enabled) ESP_LOGI(TAG, "Da nap cau hinh IP tinh: %s", s_static_ip.ip);
+    }
+
     /* 2. netif + esp_wifi (qua esp_wifi_remote → SDIO → C6) */
     s_netif = esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -230,6 +288,40 @@ void wifi_manager_force_ntp_sync(void)
     if (!s_connected || !s_sntp_init) return;
     s_time_synced = false;
     esp_netif_sntp_start();   /* "restart it if already started" — ép lấy mốc mới */
+}
+
+esp_err_t wifi_manager_set_static_ip(const wifi_static_ip_cfg_t *cfg)
+{
+    if (!cfg) return ESP_ERR_INVALID_ARG;
+    if (cfg->enabled && (!cfg->ip[0] || ipaddr_addr(cfg->ip) == IPADDR_NONE)) {
+        return ESP_ERR_INVALID_ARG;   /* bật IP tĩnh nhưng địa chỉ IP trống/sai định dạng */
+    }
+
+    s_static_ip = *cfg;
+
+    nvs_handle_t h;
+    if (nvs_open(WIFI_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "ip_en", s_static_ip.enabled ? 1 : 0);
+        nvs_set_str(h, "ip_addr", s_static_ip.ip);
+        nvs_set_str(h, "ip_nm", s_static_ip.netmask);
+        nvs_set_str(h, "ip_gw", s_static_ip.gateway);
+        nvs_set_str(h, "ip_dns", s_static_ip.dns);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+
+    /* Áp dụng ngay nếu đang kết nối: ngắt rồi để logic auto-reconnect sẵn
+     * có (WIFI_EVENT_STA_DISCONNECTED) kết nối lại — apply_ip_config() sẽ
+     * chạy lại ở WIFI_EVENT_STA_CONNECTED kế tiếp với cấu hình MỚI. */
+    if (s_connected) {
+        esp_wifi_disconnect();
+    }
+    return ESP_OK;
+}
+
+void wifi_manager_get_static_ip(wifi_static_ip_cfg_t *out)
+{
+    if (out) *out = s_static_ip;
 }
 
 /* Trả số vạch từ RSSI cache (không gọi RPC → an toàn gọi trong LVGL timer). */

@@ -620,6 +620,19 @@ static void app_state_camera_sync(void)
 
 static void app_state_wifi_sync(void)
 {
+    /* Đồng bộ cấu hình IP tĩnh mỗi tick (rẻ — chỉ đọc biến local trong
+     * wifi_manager, không có RPC) thay vì chỉ 1 lần lúc app_state_init():
+     * wifi_manager_init() nạp NVS trong task NỀN bất đồng bộ nên tại thời
+     * điểm app_state_init() chạy, dữ liệu NVS có thể CHƯA kịp nạp xong —
+     * đồng bộ lại mỗi tick tránh sai lệch race condition này. */
+    wifi_static_ip_cfg_t sip;
+    wifi_manager_get_static_ip(&sip);
+    s_state.wifi_static_en = sip.enabled;
+    snprintf(s_state.wifi_static_ip, sizeof(s_state.wifi_static_ip), "%s", sip.ip);
+    snprintf(s_state.wifi_static_netmask, sizeof(s_state.wifi_static_netmask), "%s", sip.netmask);
+    snprintf(s_state.wifi_static_gateway, sizeof(s_state.wifi_static_gateway), "%s", sip.gateway);
+    snprintf(s_state.wifi_static_dns, sizeof(s_state.wifi_static_dns), "%s", sip.dns);
+
     uint32_t gen = 0;
     wifi_ap_info_t aps[APP_MAX_WIFI_NETWORKS];
     int n = wifi_manager_get_scan(aps, APP_MAX_WIFI_NETWORKS, &gen);
@@ -660,6 +673,18 @@ void app_state_wifi_connect(int idx, const char *pass)
     for (int i = 0; i < s_state.wifi_network_count; i++) s_state.wifi_networks[i].selected = false;
     s_state.wifi_networks[idx].selected = true;
     wifi_manager_connect(s_state.wifi_networks[idx].ssid, pass);
+}
+
+bool app_state_wifi_set_static_ip(bool enabled, const char *ip, const char *netmask,
+                                   const char *gateway, const char *dns)
+{
+    wifi_static_ip_cfg_t cfg = {0};
+    cfg.enabled = enabled;
+    snprintf(cfg.ip, sizeof(cfg.ip), "%s", ip ? ip : "");
+    snprintf(cfg.netmask, sizeof(cfg.netmask), "%s", netmask ? netmask : "");
+    snprintf(cfg.gateway, sizeof(cfg.gateway), "%s", gateway ? gateway : "");
+    snprintf(cfg.dns, sizeof(cfg.dns), "%s", dns ? dns : "");
+    return wifi_manager_set_static_ip(&cfg) == ESP_OK;
 }
 
 void app_state_select_station(int idx)
