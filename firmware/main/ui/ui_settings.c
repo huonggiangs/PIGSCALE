@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "esp_log.h"
 #include "ui_settings.h"
 #include "ui_theme.h"
 #include "ui_common.h"
@@ -54,9 +55,20 @@ static void kb_focus_event_cb(lv_event_t *e)
     if (code == LV_EVENT_FOCUSED) {
         lv_keyboard_set_textarea(s_kb, ta);
         lv_obj_clear_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_move_foreground(s_kb);
+        /* Đã BỎ lv_obj_move_foreground(s_kb) — hàm này ở LVGL v9 thực
+         * chất gọi lv_obj_move_to_index(obj, child_count-1) (xem
+         * lv_api_map_v8.h), ĐÚNG nhóm hàm đã xác nhận gây lỗi hiển thị/
+         * layout 2 lần trước trong dự án này (lỗi header). s_kb được
+         * dựng DUY NHẤT 1 LẦN, là phần tử cuối cùng thêm vào trong toàn
+         * bộ chuỗi dựng shell (ui_settings_create chạy sau cùng trong
+         * ui_shell_build) — nên nó ĐÃ nằm trên cùng theo đúng thứ tự
+         * dựng, không cần gọi move lại mỗi lần focus (vừa thừa vừa rủi
+         * ro rơi vào đúng lớp lỗi move_to_index đã biết). */
+        ESP_LOGI("REFRESH_DBG", "KB SHOW placeholder=\"%s\" kb_hidden_sau=%d",
+                 lv_textarea_get_placeholder_text(ta), (int)lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN));
     } else if (code == LV_EVENT_DEFOCUSED || code == LV_EVENT_READY || code == LV_EVENT_CANCEL) {
         lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
+        ESP_LOGI("REFRESH_DBG", "KB HIDE placeholder=\"%s\" code=%d", lv_textarea_get_placeholder_text(ta), (int)code);
     }
 }
 
@@ -1092,7 +1104,8 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     lv_obj_set_style_pad_column(s_kb, 8, 0);
     lv_obj_align(s_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_foreground(s_kb);
+    /* Không cần lv_obj_move_foreground() ở đây — s_kb vừa được tạo nên
+     * mặc định đã là con cuối cùng (trên cùng) của cha nó. */
 
     return s_container;
 }
