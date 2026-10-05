@@ -70,6 +70,11 @@ static void open_cancel_modal(const char *receipt_no, const char *order_code)
     s_cancel_reason_ta = lv_textarea_create(box);
     lv_textarea_set_placeholder_text(s_cancel_reason_ta, "Nhập lý do...");
     lv_obj_set_style_text_font(s_cancel_reason_ta, UI_FONT_BODY, 0);
+    /* placeholder dùng part riêng LV_PART_TEXTAREA_PLACEHOLDER — không kế
+     * thừa font từ part MAIN, thiếu dòng này chữ có dấu trong placeholder
+     * hiện thành ô trống (tofu). Xem ghi chú đầy đủ ở make_text_field()
+     * trong ui_settings.c (cùng lỗi, gốc chung). */
+    lv_obj_set_style_text_font(s_cancel_reason_ta, UI_FONT_BODY, LV_PART_TEXTAREA_PLACEHOLDER);
     lv_obj_set_width(s_cancel_reason_ta, LV_PCT(100));
     lv_obj_set_height(s_cancel_reason_ta, 70);
     lv_obj_add_event_cb(s_cancel_reason_ta, cancel_ta_focus_cb, LV_EVENT_FOCUSED, NULL);
@@ -199,6 +204,7 @@ lv_obj_t *ui_history_create(lv_obj_t *parent)
     lv_textarea_set_one_line(s_search_ta, true);
     lv_textarea_set_placeholder_text(s_search_ta, "Tìm theo mã đơn / khách hàng / biển số");
     lv_obj_set_style_text_font(s_search_ta, UI_FONT_BODY, 0);
+    lv_obj_set_style_text_font(s_search_ta, UI_FONT_BODY, LV_PART_TEXTAREA_PLACEHOLDER);  /* xem ghi chú ở make_text_field() trong ui_settings.c */
     lv_obj_set_width(s_search_ta, LV_PCT(100));
     lv_obj_add_event_cb(s_search_ta, search_ta_event_cb, LV_EVENT_ALL, NULL);
 

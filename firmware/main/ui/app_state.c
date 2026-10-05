@@ -594,6 +594,19 @@ void app_state_camera_test_connect(const char *ip, uint16_t port)
     camera_client_test_async(ip, port);
 }
 
+/* Chỉ LƯU ip/port (không gọi camera_client_test_async) — dùng cho nút
+ * "Lưu" riêng, để xác nhận giá trị vừa gõ đã ghi nhận đúng mà không phụ
+ * thuộc kết quả kiểm tra kết nối (có thể thất bại vì lý do mạng khác,
+ * không liên quan gì tới việc port/IP đã được lưu đúng hay chưa). Lần tự
+ * kiểm tra lại định kỳ (app_state_camera_sync) sẽ tự dùng giá trị mới này
+ * trong tối đa 20 giây. */
+void app_state_camera_save_config(const char *ip, uint16_t port)
+{
+    if (!ip || !ip[0]) return;
+    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "%s", ip);
+    s_state.camera_port = port;
+}
+
 bool app_state_camera_is_checking(void)
 {
     return camera_client_is_busy();

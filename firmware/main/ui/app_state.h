@@ -331,6 +331,8 @@ bool app_state_wifi_set_static_ip(bool enabled, const char *ip, const char *netm
 
 /* ── Camera (kiểm tra kết nối HTTP thật — xem network/camera_client.h) ──── */
 void app_state_camera_test_connect(const char *ip, uint16_t port);
+/** Chỉ lưu ip/port, KHÔNG kiểm tra kết nối ngay — xem app_state.c. */
+void app_state_camera_save_config(const char *ip, uint16_t port);
 bool app_state_camera_is_checking(void);
 
 /* ── Thời gian hệ thống (GMT+7 Việt Nam — xem main.c setenv TZ) ──────────── */

@@ -66,6 +66,16 @@ static lv_obj_t *make_text_field(lv_obj_t *parent, const char *placeholder)
     lv_textarea_set_one_line(ta, true);
     lv_textarea_set_placeholder_text(ta, placeholder);
     lv_obj_set_style_text_font(ta, UI_FONT_BODY, 0);
+    /* lv_textarea vẽ chữ GÕ VÀO (LV_PART_MAIN) và PLACEHOLDER
+     * (LV_PART_TEXTAREA_PLACEHOLDER) bằng 2 "part" style RIÊNG — set font
+     * ở part 0 (MAIN) KHÔNG áp dụng cho placeholder. Thiếu dòng này,
+     * placeholder rơi về font mặc định của LVGL (không có dấu tiếng Việt)
+     * → chữ có dấu trong placeholder (vd. "Ví dụ: ...") hiện thành ô chữ
+     * nhật đứng trống (tofu) — đây là "card địa chỉ IP" vừa báo lỗi, vì
+     * đó là nơi đầu tiên có placeholder tiếng Việt luôn hiển thị thật sự
+     * (các ô khác thường được điền sẵn giá trị nên placeholder ít khi lộ
+     * ra). */
+    lv_obj_set_style_text_font(ta, UI_FONT_BODY, LV_PART_TEXTAREA_PLACEHOLDER);
     lv_obj_set_width(ta, LV_PCT(100));
     lv_obj_add_event_cb(ta, kb_focus_event_cb, LV_EVENT_ALL, NULL);
     return ta;
@@ -98,6 +108,7 @@ static lv_obj_t *make_password_row(lv_obj_t *parent, const char *placeholder)
     lv_textarea_set_password_mode(ta, true);
     lv_textarea_set_placeholder_text(ta, placeholder);
     lv_obj_set_style_text_font(ta, UI_FONT_BODY, 0);
+    lv_obj_set_style_text_font(ta, UI_FONT_BODY, LV_PART_TEXTAREA_PLACEHOLDER);  /* xem ghi chú trong make_text_field() */
     lv_obj_set_flex_grow(ta, 1);
     lv_obj_add_event_cb(ta, kb_focus_event_cb, LV_EVENT_ALL, NULL);
 
@@ -458,22 +469,51 @@ static void cam_search_cb(lv_event_t *e)
  * nhật app_state()->camera_link, đọc lại trong app_state_camera_sync() mỗi
  * tick (0.5s) kể cả khi không ở tab Cài đặt — hiển thị "real-time" cả ở
  * header lẫn tab Cân. */
-static void cam_connect_cb(lv_event_t *e)
+/* Đọc IP/Port đang gõ trong 2 ô nhập — dùng chung cho cả nút "Lưu" lẫn
+ * "Kiểm tra kết nối" để không lặp code. Port mặc định 80 CHỈ khi ô trống
+ * hoặc nhập sai định dạng — nếu người dùng đã gõ số hợp lệ (vd. 8080) thì
+ * luôn dùng đúng số đó. */
+static uint16_t cam_read_port(void)
 {
-    LV_UNUSED(e);
-    const char *ip = s_cam_ip_ta ? lv_textarea_get_text(s_cam_ip_ta) : "";
     uint16_t port = 80;
     if (s_cam_port_ta) {
         int p = atoi(lv_textarea_get_text(s_cam_port_ta));
         if (p > 0 && p <= 65535) port = (uint16_t)p;
     }
+    return port;
+}
+
+static void cam_save_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    const char *ip = s_cam_ip_ta ? lv_textarea_get_text(s_cam_ip_ta) : "";
+    uint16_t port = cam_read_port();
+    if (!ip[0]) {
+        ui_shell_toast("Nhập địa chỉ IP camera trước khi lưu");
+        return;
+    }
+    app_state_camera_save_config(ip, port);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Đã lưu camera: %s:%u", ip, (unsigned)port);
+    ui_shell_toast(buf);
+}
+
+static void cam_connect_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    const char *ip = s_cam_ip_ta ? lv_textarea_get_text(s_cam_ip_ta) : "";
+    uint16_t port = cam_read_port();
     if (!ip[0]) {
         ui_shell_toast("Nhập địa chỉ IP camera trước");
         return;
     }
     app_state_camera_test_connect(ip, port);
     if (s_cam_status_label) lv_label_set_text(s_cam_status_label, "Đang kiểm tra...");
-    ui_shell_toast("Đang kiểm tra kết nối camera...");
+    /* Hiện rõ IP:Port THẬT đang dùng để kiểm tra — để người dùng xác nhận
+     * đúng giá trị vừa gõ đã được ghi nhận (vd. đổi cổng 80 -> 8080). */
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Đang kiểm tra kết nối camera: %s:%u...", ip, (unsigned)port);
+    ui_shell_toast(buf);
 }
 
 static void build_gateway_section(lv_obj_t *host)
@@ -571,7 +611,7 @@ static void build_gateway_section(lv_obj_t *host)
     lv_obj_set_flex_flow(cam_port_col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_grow(cam_port_col, 1);
     lv_obj_clear_flag(cam_port_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(cam_port_col, "Cổng (HTTP)");
+    make_field_label(cam_port_col, "Cổng (HTTPS)");
     s_cam_port_ta = make_text_field(cam_port_col, "80");
     char cam_port_buf[8]; snprintf(cam_port_buf, sizeof(cam_port_buf), "%u", (unsigned)gst->camera_port);
     lv_textarea_set_text(s_cam_port_ta, cam_port_buf);
@@ -584,8 +624,25 @@ static void build_gateway_section(lv_obj_t *host)
     s_cam_pass_ta = make_password_row(card, "Mật khẩu camera...");
     lv_textarea_set_text(s_cam_pass_ta, "Vivoo@003");
 
-    lv_obj_t *cam_connect_btn = ui_common_button(card, "Kiểm tra kết nối Camera", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
-    lv_obj_set_width(cam_connect_btn, LV_PCT(100));
+    lv_obj_t *cam_btn_row = lv_obj_create(card);
+    lv_obj_remove_style_all(cam_btn_row);
+    lv_obj_set_flex_flow(cam_btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(cam_btn_row, 8, 0);
+    lv_obj_set_width(cam_btn_row, LV_PCT(100));
+    lv_obj_set_height(cam_btn_row, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(cam_btn_row, LV_OBJ_FLAG_SCROLLABLE);
+
+    /* Tách riêng "Lưu" khỏi "Kiểm tra kết nối": trước đây chỉ có 1 nút vừa
+     * lưu vừa kiểm tra, dễ gây cảm giác "không đổi được Port/IP" nếu lần
+     * kiểm tra đó thất bại (mạng lỗi) dù giá trị NHẬP VÀO thật ra đã được
+     * ghi nhận đúng — giờ bấm "Lưu" xác nhận rõ giá trị đã ghi nhận ngay
+     * (hiện IP:Port trong thông báo), không phụ thuộc kết quả kết nối. */
+    lv_obj_t *cam_save_btn = ui_common_button_outline(cam_btn_row, "Lưu", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_set_flex_grow(cam_save_btn, 1);
+    lv_obj_add_event_cb(cam_save_btn, cam_save_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *cam_connect_btn = ui_common_button(cam_btn_row, "Kiểm tra kết nối", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_set_flex_grow(cam_connect_btn, 2);
     lv_obj_add_event_cb(cam_connect_btn, cam_connect_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *cam_note = lv_label_create(card);
     lv_label_set_text(cam_note,
