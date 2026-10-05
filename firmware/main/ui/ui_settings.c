@@ -536,28 +536,14 @@ static void build_gateway_section(lv_obj_t *host)
     s_gw_status_label = make_field_label(status_row, gst->gateway_link == LINK_OK ? "Đã kết nối" : "Chưa kết nối");
 
     /* Địa chỉ IP/Cổng Gateway — trước đây là nhãn tĩnh "192.168.1.10:8080"
-     * hiện cố định bất kể cấu hình thật (hardcode). Giờ là 2 ô nhập thật. */
-    lv_obj_t *gw_addr_row = lv_obj_create(card);
-    lv_obj_remove_style_all(gw_addr_row);
-    lv_obj_set_flex_flow(gw_addr_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(gw_addr_row, 8, 0);
-    lv_obj_set_width(gw_addr_row, LV_PCT(100));
-    lv_obj_set_height(gw_addr_row, LV_SIZE_CONTENT);
-    lv_obj_clear_flag(gw_addr_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *gw_ip_col = lv_obj_create(gw_addr_row);
-    lv_obj_remove_style_all(gw_ip_col);
-    lv_obj_set_flex_flow(gw_ip_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(gw_ip_col, 2);
-    lv_obj_clear_flag(gw_ip_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(gw_ip_col, "Địa chỉ IP");
-    s_gw_ip_ta = make_text_field(gw_ip_col, "Nhập IP Gateway...");
-    lv_obj_t *gw_port_col = lv_obj_create(gw_addr_row);
-    lv_obj_remove_style_all(gw_port_col);
-    lv_obj_set_flex_flow(gw_port_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(gw_port_col, 1);
-    lv_obj_clear_flag(gw_port_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(gw_port_col, "Cổng");
-    s_gw_port_ta = make_text_field(gw_port_col, "8080");
+     * hiện cố định bất kể cấu hình thật (hardcode). Giờ là 2 ô nhập thật.
+     * 2 hàng riêng (không lồng cột trong hàng) — xem ghi chú ở card
+     * CAMERA về lý do đổi cấu trúc (bấm không mở được bàn phím). */
+    make_field_label(card, "Địa chỉ IP");
+    s_gw_ip_ta = make_text_field(card, "Nhập IP Gateway...");
+
+    make_field_label(card, "Cổng");
+    s_gw_port_ta = make_text_field(card, "8080");
 
     make_field_label(card, "Token truy cập");
     make_text_field(card, "Nhập token...");
@@ -591,28 +577,18 @@ static void build_gateway_section(lv_obj_t *host)
     lv_obj_clear_flag(s_cam_list_host, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_cam_list_host, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t *cam_addr_row = lv_obj_create(card);
-    lv_obj_remove_style_all(cam_addr_row);
-    lv_obj_set_flex_flow(cam_addr_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(cam_addr_row, 8, 0);
-    lv_obj_set_width(cam_addr_row, LV_PCT(100));
-    lv_obj_set_height(cam_addr_row, LV_SIZE_CONTENT);
-    lv_obj_clear_flag(cam_addr_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *cam_ip_col = lv_obj_create(cam_addr_row);
-    lv_obj_remove_style_all(cam_ip_col);
-    lv_obj_set_flex_flow(cam_ip_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(cam_ip_col, 2);
-    lv_obj_clear_flag(cam_ip_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(cam_ip_col, "Địa chỉ IP camera");
-    s_cam_ip_ta = make_text_field(cam_ip_col, "Nhập IP camera...");
+    /* Trước đây IP+Cổng nằm trong 2 "cột" lồng bên trong 1 "hàng" (flex
+     * ROW chứa 2 flex COLUMN con, canh bằng flex_grow) — ô nhập vẫn hiện
+     * đúng vị trí/chữ nhưng người dùng báo bấm vào không mở được bàn
+     * phím. Đổi sang 2 hàng riêng, rộng hết card — ĐÚNG cấu trúc đơn
+     * giản đã xác nhận hoạt động tốt ở card "ĐỊA CHỈ IP" (IP tĩnh) ngay
+     * phía trên — không còn lồng flex-trong-flex nữa. */
+    make_field_label(card, "Địa chỉ IP camera");
+    s_cam_ip_ta = make_text_field(card, "Nhập IP camera...");
     lv_textarea_set_text(s_cam_ip_ta, gst->camera_ip);
-    lv_obj_t *cam_port_col = lv_obj_create(cam_addr_row);
-    lv_obj_remove_style_all(cam_port_col);
-    lv_obj_set_flex_flow(cam_port_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(cam_port_col, 1);
-    lv_obj_clear_flag(cam_port_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(cam_port_col, "Cổng (HTTPS)");
-    s_cam_port_ta = make_text_field(cam_port_col, "80");
+
+    make_field_label(card, "Cổng (HTTPS)");
+    s_cam_port_ta = make_text_field(card, "80");
     char cam_port_buf[8]; snprintf(cam_port_buf, sizeof(cam_port_buf), "%u", (unsigned)gst->camera_port);
     lv_textarea_set_text(s_cam_port_ta, cam_port_buf);
 
@@ -776,28 +752,14 @@ static void build_p5_section(lv_obj_t *host)
     lv_obj_add_flag(s_p5_list_host, LV_OBJ_FLAG_HIDDEN);
 
     /* Địa chỉ IP/Cổng — trước đây là nhãn tĩnh "192.168.1.20:502" cố định
-     * (hardcode), giờ là 2 ô nhập thật, điền tự động khi "Chọn" ở trên. */
-    lv_obj_t *p5_addr_row = lv_obj_create(card);
-    lv_obj_remove_style_all(p5_addr_row);
-    lv_obj_set_flex_flow(p5_addr_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(p5_addr_row, 8, 0);
-    lv_obj_set_width(p5_addr_row, LV_PCT(100));
-    lv_obj_set_height(p5_addr_row, LV_SIZE_CONTENT);
-    lv_obj_clear_flag(p5_addr_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *p5_ip_col = lv_obj_create(p5_addr_row);
-    lv_obj_remove_style_all(p5_ip_col);
-    lv_obj_set_flex_flow(p5_ip_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(p5_ip_col, 2);
-    lv_obj_clear_flag(p5_ip_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(p5_ip_col, "Địa chỉ IP");
-    s_p5_ip_ta = make_text_field(p5_ip_col, "Chọn thiết bị ở trên hoặc nhập tay...");
-    lv_obj_t *p5_port_col = lv_obj_create(p5_addr_row);
-    lv_obj_remove_style_all(p5_port_col);
-    lv_obj_set_flex_flow(p5_port_col, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(p5_port_col, 1);
-    lv_obj_clear_flag(p5_port_col, LV_OBJ_FLAG_SCROLLABLE);
-    make_field_label(p5_port_col, "Cổng");
-    s_p5_port_ta = make_text_field(p5_port_col, "502");
+     * (hardcode), giờ là 2 ô nhập thật, điền tự động khi "Chọn" ở trên.
+     * 2 hàng riêng (không lồng cột trong hàng) — xem ghi chú ở card
+     * CAMERA về lý do đổi cấu trúc (bấm không mở được bàn phím). */
+    make_field_label(card, "Địa chỉ IP");
+    s_p5_ip_ta = make_text_field(card, "Chọn thiết bị ở trên hoặc nhập tay...");
+
+    make_field_label(card, "Cổng");
+    s_p5_port_ta = make_text_field(card, "502");
 
     make_field_label(card, "Tài khoản");
     make_text_field(card, "Tài khoản P5 Scale...");
