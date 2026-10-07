@@ -74,4 +74,22 @@
 ### Còn tồn tại / chưa thể xác nhận (không đổi so với trước, trừ khi nêu trên)
 
 - Toàn bộ các mục P0/P1/P2 còn lại trong bảng phát hiện ở trên (backend đồng bộ thật, khoá ghép sự kiện camera-phiên cân, token/TLS CA pinning camera, Secure Boot/NVS Encryption, xác minh Ethernet PHY, tài khoản/PIN demo) **chưa được xử lý trong phiên này** — đây là các quyết định chính sách/phối hợp nhà cung cấp/đốt eFuse cần xác nhận rõ ràng của người vận hành trước khi làm, không tự ý thực hiện.
-- Codec/profile/độ phân giải thật của luồng RTSP camera vẫn chưa xác nhận được (xem mục RTSP reset ở trên) — decoder hiện giả định H.264; nếu camera trả H.265 hoặc codec khác, `rtsp_player.c` sẽ dừng với log lỗi thay vì hiển thị video (đã code chủ động từ chối thay vì hiển thị sai).
+
+## Cập nhật xử lý — 07/10/2026 (phiên 3) — Kết luận RTSP: lỗi thư viện Espressif, không phải firmware/camera
+
+### Đã xác nhận bằng chứng cụ thể (không đoán)
+
+- **Phía camera hoàn toàn khoẻ mạnh**: dùng script Python tự viết nối RTSP tới `192.168.1.10:554` với `admin`/mật khẩu thật trên MỘT kết nối TCP duy trì xuyên suốt (không mở kết nối mới giữa bước thách thức và bước trả lời — đây chính là lỗi trong lần thử trước khiến bị 401 giả), nhận được chuỗi hợp lệ: `OPTIONS` → 200 OK, `DESCRIBE` (sau Digest, realm `"EPCam"`) → 200 OK kèm SDP thật: **video H.264 (`H264/90000`)**, audio G.711, server `LIVE555 Streaming Media`. Lần reset kết nối ghi nhận ở phiên 2 chỉ là tạm thời (nhiều khả năng do chính các lần dò thử dồn dập trước đó kích hoạt chặn tạm) — tại thời điểm này, camera trả lời bình thường mọi request, không reset.
+- Đồng thời xác nhận trên đúng thiết bị thật (log serial trong lúc phiên cân đang mở): `rtsp_player` tự bật đúng như thiết kế, gọi tới đúng URL `rtsp://192.168.1.10:554/live/1`, nhưng dừng ngay ở bước **"Connecting..." → "Connection failed, error: Success"** chỉ 10ms sau — nghĩa là thất bại ngay ở tầng kết nối TCP của thư viện, **trước khi kịp gửi bất kỳ request RTSP nào** (không phải lỗi giao thức/auth/codec).
+- Vì script Python (môi trường khác hẳn) kết nối thành công ngay lập tức tới đúng IP/cổng đó trong cùng khung thời gian, nguyên nhân được khoanh vùng chắc chắn vào bên trong thư viện client RTSP của Espressif (`espressif/esp_rtsp_service` gọi `esp_media_protocols` — mã lõi `ESP_RTSP_CLIENT` đóng gói dạng thư viện tĩnh `.a` đã biên dịch sẵn, không có mã nguồn để đọc/sửa). Thông báo `"error: Success"` (tức `strerror(0)`) là dấu hiệu thư viện tự báo lỗi mà không set `errno` đúng cách ở nhánh thất bại đó — một lỗi/giới hạn bên trong thư viện, không phải do cách firmware này cấu hình hay gọi nó.
+- Đã thử nới lỏng version constraint `espressif/esp_rtsp_service` từ `^0.5.1` sang `*` để kiểm tra có bản mới hơn không: **`0.5.1` là bản DUY NHẤT được đăng trên registry** (registry trả về đúng `0.5.1` cho cả hai constraint) — không có bản vá nào để nâng cấp thử. Đã khôi phục lại `^0.5.1` như cũ, build xác nhận lại giống hệt bản đang chạy trên thiết bị (không cần nạp lại).
+
+### Kết luận
+
+**Toàn bộ phần do firmware này kiểm soát đã đúng và đã xác minh**: wiring RTSP→H.264→LVGL, bật/tắt theo vòng đời tab/phiên cân, codec H.264 đúng như camera trả về, thông tin đăng nhập đúng, không có vấn đề mạng/ACL/tường lửa ở tầng camera. Điểm nghẽn còn lại nằm ngoài tầm kiểm soát của firmware: lỗi/giới hạn bên trong thư viện `espressif/esp_rtsp_service` 0.5.1 (bản tiền-1.0) khi thực hiện kết nối TCP tới camera này trên phần cứng ESP32-P4/ESP32-C6 thật — không có cách vá vì thư viện đóng gói nhị phân sẵn, không có bản mới hơn để thử.
+
+### Đề xuất hướng tiếp theo (cần người vận hành quyết định, không tự ý làm thêm)
+
+1. Báo lỗi cho Espressif (GitHub issue `espressif/esp_rtsp_service`) kèm bằng chứng trên: kết nối thuần tới cùng IP/cổng từ môi trường khác thành công tức thì, còn thư viện báo "Connection failed, error: Success" ngay ở bước connect.
+2. Chờ bản vá / theo dõi phiên bản mới của thư viện trước khi thử lại.
+3. Nếu cần video trực tiếp gấp hơn mức chờ thư viện vá, cân nhắc phương án khác ngoài `esp_rtsp_service` (vd: tự viết RTSP/RTP client tối giản dựa trên lwIP socket thuần, dùng lại `esp_h264` cho phần giải mã) — khối lượng việc đáng kể, cần xác nhận trước khi bắt tay vào.
