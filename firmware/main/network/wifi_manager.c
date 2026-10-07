@@ -293,22 +293,35 @@ void wifi_manager_force_ntp_sync(void)
 esp_err_t wifi_manager_set_static_ip(const wifi_static_ip_cfg_t *cfg)
 {
     if (!cfg) return ESP_ERR_INVALID_ARG;
-    if (cfg->enabled && (!cfg->ip[0] || ipaddr_addr(cfg->ip) == IPADDR_NONE)) {
-        return ESP_ERR_INVALID_ARG;   /* bật IP tĩnh nhưng địa chỉ IP trống/sai định dạng */
+    if (cfg->enabled) {
+        ip4_addr_t ip, mask, gateway, dns;
+        if (!cfg->ip[0] || !ip4addr_aton(cfg->ip, &ip) || ip.addr == 0 || ip.addr == IPADDR_BROADCAST ||
+            !cfg->netmask[0] || !ip4addr_aton(cfg->netmask, &mask)) return ESP_ERR_INVALID_ARG;
+        uint32_t mask_host = lwip_ntohl(mask.addr);
+        uint32_t inverse = ~mask_host;
+        if (mask_host == 0 || (inverse & (inverse + 1U)) != 0) return ESP_ERR_INVALID_ARG;
+        uint32_t host = lwip_ntohl(ip.addr) & inverse;
+        if (host == 0 || host == inverse) return ESP_ERR_INVALID_ARG;
+        if (cfg->gateway[0]) {
+            if (!ip4addr_aton(cfg->gateway, &gateway) || gateway.addr == 0 || gateway.addr == IPADDR_BROADCAST ||
+                (ip.addr & mask.addr) != (gateway.addr & mask.addr)) return ESP_ERR_INVALID_ARG;
+        }
+        if (cfg->dns[0] && (!ip4addr_aton(cfg->dns, &dns) || dns.addr == 0 || dns.addr == IPADDR_BROADCAST))
+            return ESP_ERR_INVALID_ARG;
     }
-
-    s_static_ip = *cfg;
 
     nvs_handle_t h;
-    if (nvs_open(WIFI_NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
-        nvs_set_u8(h, "ip_en", s_static_ip.enabled ? 1 : 0);
-        nvs_set_str(h, "ip_addr", s_static_ip.ip);
-        nvs_set_str(h, "ip_nm", s_static_ip.netmask);
-        nvs_set_str(h, "ip_gw", s_static_ip.gateway);
-        nvs_set_str(h, "ip_dns", s_static_ip.dns);
-        nvs_commit(h);
-        nvs_close(h);
-    }
+    esp_err_t err = nvs_open(WIFI_NVS_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(h, "ip_en", cfg->enabled ? 1 : 0);
+    if (err == ESP_OK) err = nvs_set_str(h, "ip_addr", cfg->ip);
+    if (err == ESP_OK) err = nvs_set_str(h, "ip_nm", cfg->netmask);
+    if (err == ESP_OK) err = nvs_set_str(h, "ip_gw", cfg->gateway);
+    if (err == ESP_OK) err = nvs_set_str(h, "ip_dns", cfg->dns);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    if (err != ESP_OK) return err;
+    s_static_ip = *cfg;
 
     /* Áp dụng ngay nếu đang kết nối: ngắt rồi để logic auto-reconnect sẵn
      * có (WIFI_EVENT_STA_DISCONNECTED) kết nối lại — apply_ip_config() sẽ

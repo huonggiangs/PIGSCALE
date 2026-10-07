@@ -1,18 +1,18 @@
 ## idf_component.yml — PIG WEIGH (tái sử dụng bring-up phần cứng từ CÂN MÁY XÚC V3)
 ## Khai báo các IDF managed components cần thiết
 dependencies:
-  idf: ">=5.4.0"
+  idf: '>=5.4.0'
 
   ## LVGL v9 + ESP LVGL Port (hỗ trợ MIPI-DSI trên P4)
-  lvgl/lvgl: "~9.2.0"
+  lvgl/lvgl: ~9.2.0
   ## Ghim 2.4.x: 2.8.0 dùng LV_COLOR_FORMAT_RGB565_SWAPPED chỉ có trong LVGL 9.3+
-  espressif/esp_lvgl_port: "~2.4.0"
+  espressif/esp_lvgl_port: ~2.4.0
 
   ## Touch driver abstraction layer (cần cho esp_lcd_touch.h)
-  espressif/esp_lcd_touch: ">=1.0.0"
+  espressif/esp_lcd_touch: '>=1.0.0'
 
   ## GT911/GT9271 touch driver (GT9271 tương thích hoàn toàn với GT911)
-  espressif/esp_lcd_touch_gt911: ">=1.0.0"
+  espressif/esp_lcd_touch_gt911: '>=1.0.0'
 
   ## Panel driver JD9365 (Jadard) — MIPI-DSI 2-lane, 800×1280, panel 10.1" Waveshare.
   ## PHẢI dùng bản waveshare, KHÔNG dùng espressif/esp_lcd_jd9365: đã xác nhận qua
@@ -21,11 +21,13 @@ dependencies:
   ## qua IC I2C 0x45 trong lúc init (board này KHÔNG có GPIO điều khiển đèn nền).
   ## Macros API giống hệt bản espressif: JD9365_PANEL_BUS_DSI_2CH_CONFIG,
   ## JD9365_800_1280_PANEL_60HZ_DPI_CONFIG, esp_lcd_new_panel_jd9365().
-  waveshare/esp_lcd_jd9365_10_1: "*"
+  waveshare/esp_lcd_jd9365_10_1: '*'
 
   ## WiFi qua ESP32-C6 (SDIO). GHIM esp_hosted 2.12.2 — đã xác nhận qua dự án
   ## tham chiếu C:\Users\16flip\Claude\Projects\Mayxucv3 (cùng board, cùng chip
   ## rev v1.3): bản "*" hiện là 2.12.9, gây boot-loop (esp_timer NO_MEM) trên
   ## đúng revision chip này. KHÔNG tự ý nâng version nếu chưa test lại.
-  espressif/esp_hosted: "==2.12.2"
-  espressif/esp_wifi_remote: "*"
+  espressif/esp_hosted: ==2.12.2
+  espressif/esp_wifi_remote: '*'
+  espressif/esp_rtsp_service: ^0.5.1
+  espressif/esp_h264: ^1.4.1

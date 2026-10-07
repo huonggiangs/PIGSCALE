@@ -4,6 +4,8 @@
 #include "ui_common.h"
 #include "ui_shell.h"
 #include "app_state.h"
+#include "camera_receiver.h"
+#include "rtsp_player.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,8 +17,8 @@ static lv_obj_t *s_active_wrap;
 static lv_obj_t *s_order_title;
 static lv_obj_t *s_camera_wrap;
 static lv_obj_t *s_camera_status_dot;   /* màu theo app_state()->camera_link — real-time */
-static lv_obj_t *s_camera_lost_wrap;    /* ghi chú tĩnh "xem trực tiếp chưa khả dụng" */
-static lv_obj_t *s_camera_overlay_label;  /* chữ trạng thái lớn: Đã/Chưa kết nối */
+static lv_obj_t *s_camera_stream_label;
+static lv_obj_t *s_camera_overlay_label;  /* nhãn nhỏ cạnh chấm trạng thái: Đã/Chưa kết nối */
 
 static lv_obj_t *s_weight_value_label;
 static lv_obj_t *s_weight_status_label;
@@ -179,6 +181,14 @@ static void open_manual_modal(void)
     lv_obj_set_style_text_font(s_manual_qty_ta, UI_FONT_BODY, 0);
     lv_obj_set_width(s_manual_qty_ta, LV_PCT(100));
     lv_obj_add_event_cb(s_manual_qty_ta, manual_ta_focus_cb, LV_EVENT_FOCUSED, NULL);
+    weighing_session_t *session = &app_state()->weighing;
+    if (session->camera_count_for_session) {
+        char camera_qty[16];
+        snprintf(camera_qty, sizeof(camera_qty), "%d", session->snapshot_count);
+        lv_textarea_set_text(s_manual_qty_ta, camera_qty);
+        lv_obj_add_state(s_manual_qty_ta, LV_STATE_DISABLED);
+        lv_label_set_text(q_lbl, "Số con từ camera (cố định trong phiên)");
+    }
 
     lv_obj_t *done = ui_common_button(box, "Xong", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
     lv_obj_set_width(done, LV_PCT(100));
@@ -357,13 +367,9 @@ lv_obj_t *ui_weighing_create(lv_obj_t *parent)
     lv_obj_set_height(top_row, LV_SIZE_CONTENT);
     lv_obj_clear_flag(top_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    /* Khung camera: trước đây hiện ẢNH TĨNH HARDCODE (img_camera_01_frame —
-     * một khung hình/"ảnh heo" giả lập cố định, không phải video thật) kèm
-     * dòng chữ "Đếm theo chiều dài thân · N heo" lấy từ số liệu mô phỏng
-     * (app_state_sim_tick cũ) — cả hai đều đã bỏ. Chưa có URL RTSP/ONVIF
-     * thật của camera Vivoo (xem network/camera_client.h) nên KHÔNG hiện
-     * video giả — chỉ hiện TRẠNG THÁI KẾT NỐI THẬT (real-time, cập nhật
-     * mỗi tick qua app_state()->camera_link — xem app_state_camera_sync). */
+    /* Khung video: rtsp_player vẽ ảnh giải mã H.264 (lớp nền, kín 460x259)
+     * — xem network/rtsp_player.c. Chấm trạng thái + nhãn URL là lớp phủ
+     * nhỏ góc trên/dưới, tạo SAU nên luôn nổi trên khung hình. */
     s_camera_wrap = lv_obj_create(top_row);
     lv_obj_remove_style_all(s_camera_wrap);
     lv_obj_set_size(s_camera_wrap, 460, 259); /* 16:9 */
@@ -371,24 +377,39 @@ lv_obj_t *ui_weighing_create(lv_obj_t *parent)
     lv_obj_set_style_clip_corner(s_camera_wrap, true, 0);
     lv_obj_set_style_bg_color(s_camera_wrap, UI_COLOR_HEADING, 0);
     lv_obj_set_style_bg_opa(s_camera_wrap, LV_OPA_COVER, 0);
-    lv_obj_set_flex_flow(s_camera_wrap, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(s_camera_wrap, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(s_camera_wrap, 10, 0);
     lv_obj_clear_flag(s_camera_wrap, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_camera_status_dot = ui_common_status_dot(s_camera_wrap, LINK_LOST);
+    rtsp_player_init(s_camera_wrap);
 
-    s_camera_overlay_label = lv_label_create(s_camera_wrap);
-    lv_obj_set_style_text_font(s_camera_overlay_label, UI_FONT_H4_BOLD, 0);
+    lv_obj_t *badge = lv_obj_create(s_camera_wrap);
+    lv_obj_remove_style_all(badge);
+    lv_obj_set_style_bg_color(badge, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(badge, LV_OPA_50, 0);
+    lv_obj_set_style_radius(badge, 6, 0);
+    lv_obj_set_style_pad_hor(badge, 8, 0);
+    lv_obj_set_style_pad_ver(badge, 4, 0);
+    lv_obj_set_flex_flow(badge, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(badge, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(badge, 6, 0);
+    lv_obj_set_size(badge, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(badge, LV_ALIGN_TOP_LEFT, 8, 8);
+
+    s_camera_status_dot = ui_common_status_dot(badge, LINK_LOST);
+    s_camera_overlay_label = lv_label_create(badge);
+    lv_obj_set_style_text_font(s_camera_overlay_label, UI_FONT_XS, 0);
     lv_obj_set_style_text_color(s_camera_overlay_label, lv_color_white(), 0);
 
-    s_camera_lost_wrap = lv_label_create(s_camera_wrap);
-    lv_label_set_long_mode(s_camera_lost_wrap, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(s_camera_lost_wrap, 380);
-    lv_obj_set_style_text_align(s_camera_lost_wrap, LV_TEXT_ALIGN_CENTER, 0);
-    lv_label_set_text(s_camera_lost_wrap, "Xem trực tiếp chưa khả dụng — cần URL RTSP/ONVIF do nhà sản xuất xác nhận");
-    lv_obj_set_style_text_font(s_camera_lost_wrap, UI_FONT_XS, 0);
-    lv_obj_set_style_text_color(s_camera_lost_wrap, UI_COLOR_ON_DARK_HINT, 0);
+    s_camera_stream_label = lv_label_create(s_camera_wrap);
+    lv_obj_set_width(s_camera_stream_label, 440);
+    lv_label_set_long_mode(s_camera_stream_label, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(s_camera_stream_label, UI_FONT_XS, 0);
+    lv_obj_set_style_text_color(s_camera_stream_label, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(s_camera_stream_label, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_camera_stream_label, LV_OPA_50, 0);
+    lv_obj_set_style_pad_hor(s_camera_stream_label, 8, 0);
+    lv_obj_set_style_pad_ver(s_camera_stream_label, 3, 0);
+    lv_obj_align(s_camera_stream_label, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     lv_obj_t *stat_col = lv_obj_create(top_row);
     lv_obj_remove_style_all(stat_col);
@@ -403,7 +424,7 @@ lv_obj_t *ui_weighing_create(lv_obj_t *parent)
     lv_obj_set_style_text_font(s_weight_status_label, UI_FONT_XS, 0);
 
     make_stat_card(stat_col, "SỐ CON QUA VẠCH", &s_line_count_label);
-    make_stat_card(stat_col, "SỐ CON ẢNH TĨNH", &s_snapshot_count_label);
+    make_stat_card(stat_col, "SỐ ĐẾM CAMERA TRONG PHIÊN", &s_snapshot_count_label);
 
     /* nút nhập tay */
     s_manual_btn = ui_common_button(s_active_wrap, "Nhập tay khối lượng / số con",
@@ -479,6 +500,14 @@ lv_obj_t *ui_weighing_create(lv_obj_t *parent)
     return s_container;
 }
 
+void ui_weighing_set_visible(bool visible)
+{
+    if (!visible) rtsp_player_set_enabled(false);
+    /* Khi visible=true, để ui_weighing_refresh() (gọi ngay sau đó từ
+     * ui_shell_switch_tab) tự bật lại theo đúng điều kiện w->active — tránh
+     * bật stream khi chưa có phiên cân nào đang mở. */
+}
+
 /* ────────────────────────────────────────────────────────────────────────
  * Cập nhật theo trạng thái (gọi mỗi lần vào tab + mỗi tick mô phỏng)
  * ──────────────────────────────────────────────────────────────────────── */
@@ -489,8 +518,10 @@ void ui_weighing_refresh(void)
     if (!w->active) {
         lv_obj_clear_flag(s_empty_msg, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_active_wrap, LV_OBJ_FLAG_HIDDEN);
+        rtsp_player_set_enabled(false);
         return;
     }
+    rtsp_player_set_enabled(true);
     lv_obj_add_flag(s_empty_msg, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(s_active_wrap, LV_OBJ_FLAG_HIDDEN);
 
@@ -510,6 +541,11 @@ void ui_weighing_refresh(void)
     lv_obj_set_style_bg_color(s_camera_status_dot, ui_common_link_color(cam_link), 0);
     lv_label_set_text(s_camera_overlay_label, cam_checking ? "Đang kiểm tra..." :
                        (cam_link == LINK_OK ? "Camera: Đã kết nối" : "Camera: Chưa kết nối"));
+    camera_config_t camera;
+    camera_receiver_get_config(&camera);
+    char streams[360];
+    snprintf(streams, sizeof(streams), "Main: %s\nSub: %s", camera.rtsp_main, camera.rtsp_sub);
+    lv_label_set_text(s_camera_stream_label, streams);
 
     ui_fmt_weight_kg(buf, sizeof(buf), w->weight_kg);
     char wbuf[sizeof(buf) + 8];

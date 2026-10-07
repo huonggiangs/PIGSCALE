@@ -15,6 +15,9 @@ idf_component_register(
         "network/eth_manager.c"
         "network/wifi_manager.c"
         "network/camera_client.c"
+        "network/camera_receiver.c"
+        "network/camera_protocol.c"
+        "network/rtsp_player.c"
         "ui/app_state.c"
         "ui/ui_common.c"
         "ui/ui_shell.c"
@@ -45,6 +48,8 @@ idf_component_register(
         esp_wifi
         espressif__esp_wifi_remote
         esp_http_client
+        esp_http_server
+        json
         esp_timer
         esp_lvgl_port
         esp_hw_support
@@ -54,6 +59,8 @@ idf_component_register(
         log
         esp_system
         heap
+        esp_rtsp_service
+        esp_h264
 )
 
 # Cac font do lv_font_conv sinh ra dung "#include lvgl/lvgl.h" khi khong co

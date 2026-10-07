@@ -333,7 +333,7 @@ static void sync_badge_event_cb(lv_event_t *e)
     app_state_sync_now();
     ui_shell_refresh_chrome();
     ui_orders_refresh();
-    ui_shell_toast("Đã đồng bộ toàn bộ phiếu chờ");
+    ui_shell_toast("Chưa cấu hình máy chủ đồng bộ; phiếu vẫn đang chờ");
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -428,6 +428,7 @@ static void build_standby_overlay(lv_obj_t *parent)
 static void standby_enter(void)
 {
     if (!s_standby_overlay) return;
+    ui_settings_close_keyboard();
     standby_update_clock();
     lv_obj_clear_flag(s_standby_overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(s_standby_overlay);
@@ -503,6 +504,8 @@ void ui_shell_on_login_success(void)
 
 void ui_shell_logout(void)
 {
+    ui_settings_close_keyboard();
+    ui_weighing_set_visible(false);
     app_state_logout();
     lv_obj_add_flag(s_shell_root, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(s_login_screen, LV_OBJ_FLAG_HIDDEN);
@@ -511,9 +514,12 @@ void ui_shell_logout(void)
 
 void ui_shell_switch_tab(app_tab_t tab)
 {
+    if (tab < 0 || tab >= TAB_COUNT) return;
+    ui_settings_close_keyboard();
     app_state_t *st = app_state();
 
     st->current_tab = tab;
+    ui_weighing_set_visible(tab == TAB_WEIGHING);
     for (int i = 0; i < TAB_COUNT; i++) {
         bool active = (i == (int)tab);
         if (active) lv_obj_clear_flag(s_tab_pages[i], LV_OBJ_FLAG_HIDDEN);

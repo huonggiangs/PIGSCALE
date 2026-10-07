@@ -105,6 +105,13 @@ typedef struct {
     bool   has_snapshot_count;
     int    snapshot_count;      /* số con ảnh tĩnh */
 
+    /* Camera counts are associated only when received after this session starts. */
+    uint32_t camera_sequence_at_start;
+    uint32_t camera_sequence_seen;
+    int64_t camera_session_started_us;
+    int64_t camera_count_received_us;
+    bool camera_count_for_session;
+
     bool   camera_connected;
     reconcile_status_t reconcile;
 

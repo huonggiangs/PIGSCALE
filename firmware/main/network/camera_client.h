@@ -38,6 +38,7 @@ bool camera_client_is_busy(void);
 
 /** Kết quả LẦN KIỂM TRA GẦN NHẤT đã hoàn tất. */
 camera_check_result_t camera_client_get_result(void);
+camera_check_result_t camera_client_get_result_for(const char *ip, uint16_t port);
 
 #ifdef __cplusplus
 }

@@ -9,6 +9,8 @@
 #include "ui_common.h"
 #include "ui_shell.h"
 #include "app_state.h"
+#include "camera_receiver.h"
+#include "esp_timer.h"
 
 static lv_obj_t *s_container;
 static lv_obj_t *s_wifi_pw_ta;   /* ô mật khẩu Wi-Fi — đọc thật khi bấm KẾT NỐI */
@@ -16,6 +18,11 @@ static lv_obj_t *s_host;   /* vùng nội dung dựng lại mỗi lần ui_setti
 static lv_obj_t *s_kb;     /* bàn phím dùng chung cho các ô nhập (mật khẩu Wi-Fi, token
                              * Gateway, tài khoản/mật khẩu Camera & P5 Scale) — cùng mẫu
                              * với ô tìm kiếm ở ui_history.c */
+static lv_obj_t *s_rx_port_ta, *s_cam_token_ta, *s_rtsp_main_ta, *s_rtsp_sub_ta;
+static lv_obj_t *s_rx_endpoint, *s_rx_status, *s_rx_count, *s_rx_snapshot;
+static lv_obj_t *s_snapshot_overlay;
+static uint8_t *s_snapshot_data;
+static lv_image_dsc_t s_snapshot_dsc;
 static bool s_wifi_show_all;   /* true = hiện đủ danh sách; false = thu gọn khi đã kết nối */
 static bool s_wifi_was_scanning;  /* phát hiện lúc quét VỪA xong để tự vẽ lại danh sách —
                                      xem ui_settings_tick(). Trước đây không có, nên sau khi
@@ -48,27 +55,40 @@ static lv_obj_t *s_print_preview;
 /* ────────────────────────────────────────────────────────────────────────
  * Widget dùng chung: ô nhập gắn bàn phím ảo
  * ──────────────────────────────────────────────────────────────────────── */
+void ui_settings_close_keyboard(void)
+{
+    if (!s_kb) return;
+    lv_obj_t *ta = lv_keyboard_get_textarea(s_kb);
+    lv_keyboard_set_textarea(s_kb, NULL);
+    lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
+    if (ta) lv_obj_remove_state(ta, LV_STATE_FOCUSED);
+    if (s_container) lv_obj_set_height(lv_obj_get_parent(s_container), UI_CONTENT_H);
+}
+
+static void kb_done_cb(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_READY || code == LV_EVENT_CANCEL) ui_settings_close_keyboard();
+}
+
 static void kb_focus_event_cb(lv_event_t *e)
 {
-    uint16_t code = lv_event_get_code(e);
+    lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t *ta = lv_event_get_target(e);
-    if (code == LV_EVENT_FOCUSED) {
+    if (!s_kb) return;
+    if (code == LV_EVENT_FOCUSED || code == LV_EVENT_CLICKED) {
+        const char *accepted = lv_textarea_get_accepted_chars(ta);
+        lv_keyboard_set_mode(s_kb, accepted ? LV_KEYBOARD_MODE_NUMBER : LV_KEYBOARD_MODE_TEXT_LOWER);
         lv_keyboard_set_textarea(s_kb, ta);
-        lv_obj_clear_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
-        /* Đã BỎ lv_obj_move_foreground(s_kb) — hàm này ở LVGL v9 thực
-         * chất gọi lv_obj_move_to_index(obj, child_count-1) (xem
-         * lv_api_map_v8.h), ĐÚNG nhóm hàm đã xác nhận gây lỗi hiển thị/
-         * layout 2 lần trước trong dự án này (lỗi header). s_kb được
-         * dựng DUY NHẤT 1 LẦN, là phần tử cuối cùng thêm vào trong toàn
-         * bộ chuỗi dựng shell (ui_settings_create chạy sau cùng trong
-         * ui_shell_build) — nên nó ĐÃ nằm trên cùng theo đúng thứ tự
-         * dựng, không cần gọi move lại mỗi lần focus (vừa thừa vừa rủi
-         * ro rơi vào đúng lớp lỗi move_to_index đã biết). */
-        ESP_LOGI("REFRESH_DBG", "KB SHOW placeholder=\"%s\" kb_hidden_sau=%d",
-                 lv_textarea_get_placeholder_text(ta), (int)lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN));
-    } else if (code == LV_EVENT_DEFOCUSED || code == LV_EVENT_READY || code == LV_EVENT_CANCEL) {
-        lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
-        ESP_LOGI("REFRESH_DBG", "KB HIDE placeholder=\"%s\" code=%d", lv_textarea_get_placeholder_text(ta), (int)code);
+        lv_obj_remove_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
+        /* Reserve the keyboard's space so even the final field can scroll above it. */
+        lv_obj_set_height(lv_obj_get_parent(s_container), UI_CONTENT_H - 320);
+        lv_obj_update_layout(s_container);
+        lv_obj_scroll_to_view_recursive(ta, LV_ANIM_OFF);
+    } else if ((code == LV_EVENT_DEFOCUSED || code == LV_EVENT_DELETE ||
+                code == LV_EVENT_READY || code == LV_EVENT_CANCEL) &&
+               lv_keyboard_get_textarea(s_kb) == ta) {
+        ui_settings_close_keyboard();
     }
 }
 
@@ -485,47 +505,166 @@ static void cam_search_cb(lv_event_t *e)
  * "Kiểm tra kết nối" để không lặp code. Port mặc định 80 CHỈ khi ô trống
  * hoặc nhập sai định dạng — nếu người dùng đã gõ số hợp lệ (vd. 8080) thì
  * luôn dùng đúng số đó. */
-static uint16_t cam_read_port(void)
+static bool cam_save_fields(void)
 {
-    uint16_t port = 80;
-    if (s_cam_port_ta) {
-        int p = atoi(lv_textarea_get_text(s_cam_port_ta));
-        if (p > 0 && p <= 65535) port = (uint16_t)p;
+    camera_config_t cfg = {0};
+    snprintf(cfg.ip, sizeof(cfg.ip), "%s", lv_textarea_get_text(s_cam_ip_ta));
+    snprintf(cfg.user, sizeof(cfg.user), "%s", lv_textarea_get_text(s_cam_user_ta));
+    snprintf(cfg.password, sizeof(cfg.password), "%s", lv_textarea_get_text(s_cam_pass_ta));
+    snprintf(cfg.rtsp_main, sizeof(cfg.rtsp_main), "%s", lv_textarea_get_text(s_rtsp_main_ta));
+    snprintf(cfg.rtsp_sub, sizeof(cfg.rtsp_sub), "%s", lv_textarea_get_text(s_rtsp_sub_ta));
+    snprintf(cfg.token, sizeof(cfg.token), "%s", lv_textarea_get_text(s_cam_token_ta));
+    if (!camera_parse_port(lv_textarea_get_text(s_cam_port_ta), &cfg.https_port) ||
+        !camera_parse_port(lv_textarea_get_text(s_rx_port_ta), &cfg.receive_port)) {
+        ui_shell_toast("Cổng phải là số từ 1 đến 65535");
+        return false;
     }
-    return port;
+    esp_err_t err = camera_receiver_save_config(&cfg);
+    if (err != ESP_OK) {
+        ui_shell_toast(err == ESP_ERR_INVALID_ARG ? "IP camera hoặc token không hợp lệ" : "Không lưu được cấu hình camera");
+        return false;
+    }
+    app_state_camera_save_config(cfg.ip, cfg.https_port);
+    ui_settings_close_keyboard();
+    return true;
 }
 
 static void cam_save_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
-    const char *ip = s_cam_ip_ta ? lv_textarea_get_text(s_cam_ip_ta) : "";
-    uint16_t port = cam_read_port();
-    if (!ip[0]) {
-        ui_shell_toast("Nhập địa chỉ IP camera trước khi lưu");
-        return;
-    }
-    app_state_camera_save_config(ip, port);
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Đã lưu camera: %s:%u", ip, (unsigned)port);
-    ui_shell_toast(buf);
+    if (cam_save_fields()) ui_shell_toast("Đã lưu camera; đang mở cổng nhận dữ liệu");
 }
 
 static void cam_connect_cb(lv_event_t *e)
 {
     LV_UNUSED(e);
-    const char *ip = s_cam_ip_ta ? lv_textarea_get_text(s_cam_ip_ta) : "";
-    uint16_t port = cam_read_port();
-    if (!ip[0]) {
-        ui_shell_toast("Nhập địa chỉ IP camera trước");
+    if (app_state_camera_is_checking()) {
+        ui_shell_toast("Đang kiểm tra camera, vui lòng chờ");
         return;
     }
-    app_state_camera_test_connect(ip, port);
+    if (!cam_save_fields()) return;
+    app_state_camera_test_connect(app_state()->camera_ip, app_state()->camera_port);
     if (s_cam_status_label) lv_label_set_text(s_cam_status_label, "Đang kiểm tra...");
-    /* Hiện rõ IP:Port THẬT đang dùng để kiểm tra — để người dùng xác nhận
-     * đúng giá trị vừa gõ đã được ghi nhận (vd. đổi cổng 80 -> 8080). */
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Đang kiểm tra kết nối camera: %s:%u...", ip, (unsigned)port);
-    ui_shell_toast(buf);
+    ui_shell_toast("Đang kiểm tra HTTPS của camera...");
+}
+
+static void snapshot_close_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    ui_common_modal_close(s_snapshot_overlay);
+    s_snapshot_overlay = NULL;
+    lv_image_cache_drop(&s_snapshot_dsc);
+    free(s_snapshot_data);
+    s_snapshot_data = NULL;
+}
+
+static void snapshot_open_cb(lv_event_t *e)
+{
+    LV_UNUSED(e);
+    if (s_snapshot_overlay) return;
+    size_t size = 0;
+    uint16_t width = 0, height = 0;
+    camera_count_event_t event;
+    s_snapshot_data = camera_receiver_copy_snapshot(&size, &width, &height, &event);
+    if (!s_snapshot_data) { ui_shell_toast("Chưa có ảnh hoặc không đủ bộ nhớ"); return; }
+    ui_settings_close_keyboard();
+    s_snapshot_dsc = (lv_image_dsc_t){
+        .header = {.magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RAW, .w = width, .h = height},
+        .data_size = size, .data = s_snapshot_data,
+    };
+    lv_obj_t *box = ui_common_modal_open(&s_snapshot_overlay, 740, 900);
+    lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(box, 12, 0);
+    make_section_title(box, "ẢNH CHỤP CAMERA");
+    char text[180];
+    snprintf(text, sizeof(text), "%s · %d con · thời điểm gửi: %lld", event.device_id, event.count, (long long)event.timestamp);
+    lv_obj_t *label = make_field_label(box, text);
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_t *frame = lv_obj_create(box);
+    lv_obj_remove_style_all(frame);
+    lv_obj_set_size(frame, LV_PCT(100), 620);
+    lv_obj_remove_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *img = lv_image_create(frame);
+    lv_image_set_src(img, &s_snapshot_dsc);
+    uint32_t scale_w = 680U * 256 / width;
+    uint32_t scale_h = 600U * 256 / height;
+    uint32_t scale = scale_w < scale_h ? scale_w : scale_h;
+    lv_image_set_scale(img, scale < 256 ? scale : 256);
+    lv_obj_center(img);
+    label = make_field_label(box, "Ảnh lấy sau bản tin đếm; chỉ giữ ảnh gần nhất trong RAM.");
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_t *close = ui_common_button(box, "Đóng", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_add_event_cb(close, snapshot_close_cb, LV_EVENT_CLICKED, NULL);
+}
+
+static void receiver_refresh_status(void)
+{
+    if (!s_rx_status) return;
+    camera_receiver_status_t status;
+    camera_receiver_get_status(&status);
+    char text[240];
+    camera_receiver_endpoint(text, sizeof(text));
+    lv_label_set_text(s_rx_endpoint, text);
+    if (status.applying) snprintf(text, sizeof(text), "Đang mở cổng nhận...");
+    else if (status.running) snprintf(text, sizeof(text), "Đang lắng nghe cổng %u", status.listening_port);
+    else snprintf(text, sizeof(text), "Không mở được cổng: %s", esp_err_to_name(status.server_error));
+    lv_label_set_text(s_rx_status, text);
+    if (status.sequence) {
+        long long age = (esp_timer_get_time() - status.received_us) / 1000000;
+        snprintf(text, sizeof(text), "%s · %d con · nhận %lld giây trước\nThời điểm camera: %lld",
+                 status.latest.device_id, status.latest.count, age, (long long)status.latest.timestamp);
+    } else snprintf(text, sizeof(text), "Chưa nhận bản tin đếm");
+    lv_label_set_text(s_rx_count, text);
+    if (status.snapshot_busy) snprintf(text, sizeof(text), "Đang lấy ảnh JPEG...");
+    else if (!status.sequence) snprintf(text, sizeof(text), "Chờ số đếm để lấy ảnh");
+    else if (status.snapshot_error == ESP_ERR_INVALID_STATE) snprintf(text, sizeof(text), "Đã nhận số đếm; cần Bearer token để lấy ảnh");
+    else if (status.snapshot_error != ESP_OK) snprintf(text, sizeof(text), "Lấy ảnh thất bại: HTTP %d / %s", status.snapshot_http_status, esp_err_to_name(status.snapshot_error));
+    else snprintf(text, sizeof(text), "Ảnh gần nhất: %d con · %u KB", status.snapshot_event.count, (unsigned)(status.snapshot_size / 1024));
+    lv_label_set_text(s_rx_snapshot, text);
+}
+
+static void build_receiver_section(lv_obj_t *host)
+{
+    camera_config_t cfg;
+    camera_receiver_get_config(&cfg);
+    lv_obj_t *card = ui_common_card(host);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(card, 10, 0);
+    make_section_title(card, "NHẬN DỮ LIỆU ĐẾM CAMERA");
+    make_field_label(card, "Cổng HTTP nhận dữ liệu trên thiết bị cân");
+    s_rx_port_ta = make_text_field(card, "8080");
+    lv_textarea_set_accepted_chars(s_rx_port_ta, "0123456789");
+    lv_textarea_set_max_length(s_rx_port_ta, 5);
+    char port[8]; snprintf(port, sizeof(port), "%u", cfg.receive_port);
+    lv_textarea_set_text(s_rx_port_ta, port);
+    make_field_label(card, "Bearer token camera (dùng lấy ảnh)");
+    s_cam_token_ta = make_password_row(card, "Nhập token do camera cấp...");
+    lv_textarea_set_max_length(s_cam_token_ta, sizeof(cfg.token) - 1);
+    lv_textarea_set_text(s_cam_token_ta, cfg.token);
+    lv_obj_t *save = ui_common_button(card, "Lưu camera và cổng nhận", UI_COLOR_PRIMARY, lv_color_white(), UI_FONT_BODY_BOLD);
+    lv_obj_add_event_cb(save, cam_save_cb, LV_EVENT_CLICKED, NULL);
+    make_field_label(card, "Endpoint cần cấu hình trên camera:");
+    s_rx_endpoint = make_field_label(card, "");
+    s_rx_status = make_field_label(card, "");
+    s_rx_count = make_field_label(card, "");
+    s_rx_snapshot = make_field_label(card, "");
+    lv_obj_t *labels[] = {s_rx_endpoint, s_rx_status, s_rx_count, s_rx_snapshot};
+    for (unsigned i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i) {
+        lv_obj_set_width(labels[i], LV_PCT(100));
+        lv_label_set_long_mode(labels[i], LV_LABEL_LONG_WRAP);
+    }
+    lv_obj_t *preview = ui_common_button_outline(card, "Xem ảnh gần nhất", UI_COLOR_BORDER, UI_COLOR_PRIMARY, UI_FONT_BODY_BOLD);
+    lv_obj_add_event_cb(preview, snapshot_open_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *note = make_field_label(card,
+        "Camera gửi số đếm tới endpoint trên; thiết bị lấy ảnh bằng token. "
+        "User/mật khẩu được lưu, chưa dùng để cấp token vì tài liệu chưa có API đăng nhập. "
+        "Số đếm này chưa tự chốt phiếu cân.");
+    lv_obj_set_width(note, LV_PCT(100));
+    lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_font(note, UI_FONT_XS, 0);
+    receiver_refresh_status();
 }
 
 static void build_gateway_section(lv_obj_t *host)
@@ -600,17 +739,34 @@ static void build_gateway_section(lv_obj_t *host)
     lv_textarea_set_text(s_cam_ip_ta, gst->camera_ip);
 
     make_field_label(card, "Cổng (HTTPS)");
-    s_cam_port_ta = make_text_field(card, "80");
+    s_cam_port_ta = make_text_field(card, "443");
+    lv_textarea_set_accepted_chars(s_cam_port_ta, "0123456789");
+    lv_textarea_set_max_length(s_cam_port_ta, 5);
+    lv_textarea_set_accepted_chars(s_cam_ip_ta, "0123456789.");
+    lv_textarea_set_max_length(s_cam_ip_ta, 15);
     char cam_port_buf[8]; snprintf(cam_port_buf, sizeof(cam_port_buf), "%u", (unsigned)gst->camera_port);
     lv_textarea_set_text(s_cam_port_ta, cam_port_buf);
 
     make_field_label(card, "Tên đăng nhập");
     s_cam_user_ta = make_text_field(card, "Tên đăng nhập camera...");
-    lv_textarea_set_text(s_cam_user_ta, "admin");
+    camera_config_t cfg;
+    camera_receiver_get_config(&cfg);
+    lv_textarea_set_max_length(s_cam_user_ta, sizeof(cfg.user) - 1);
+    lv_textarea_set_text(s_cam_user_ta, cfg.user);
 
     make_field_label(card, "Mật khẩu");
     s_cam_pass_ta = make_password_row(card, "Mật khẩu camera...");
-    lv_textarea_set_text(s_cam_pass_ta, "Vivoo@003");
+    lv_textarea_set_max_length(s_cam_pass_ta, sizeof(cfg.password) - 1);
+    lv_textarea_set_text(s_cam_pass_ta, cfg.password);
+
+    make_field_label(card, "RTSP luồng chính");
+    s_rtsp_main_ta = make_text_field(card, "rtsp://IP:554/live/0");
+    lv_textarea_set_max_length(s_rtsp_main_ta, sizeof(cfg.rtsp_main) - 1);
+    lv_textarea_set_text(s_rtsp_main_ta, cfg.rtsp_main);
+    make_field_label(card, "RTSP luồng phụ");
+    s_rtsp_sub_ta = make_text_field(card, "rtsp://IP:554/live/1");
+    lv_textarea_set_max_length(s_rtsp_sub_ta, sizeof(cfg.rtsp_sub) - 1);
+    lv_textarea_set_text(s_rtsp_sub_ta, cfg.rtsp_sub);
 
     lv_obj_t *cam_btn_row = lv_obj_create(card);
     lv_obj_remove_style_all(cam_btn_row);
@@ -951,6 +1107,7 @@ static void build_time_section(lv_obj_t *host)
 
 void ui_settings_tick(void)
 {
+    receiver_refresh_status();
     if (!s_time_now_label || !s_time_sync_label) return;
 
     /* WiFi vừa quét xong (quá trình thật chỉ ~2-3s, đã đo qua log — KHÔNG
@@ -958,12 +1115,12 @@ void ui_settings_tick(void)
      * "Đang quét..." tới khi người dùng vô tình làm gì khác kích hoạt vẽ
      * lại (đây là nguyên nhân thật gây cảm giác "quét rất chậm"). */
     bool scanning_now = app_state_wifi_is_scanning();
-    if (s_wifi_was_scanning && !scanning_now) {
+    if (s_wifi_was_scanning && !scanning_now && lv_obj_has_flag(s_kb, LV_OBJ_FLAG_HIDDEN)) {
         s_wifi_was_scanning = false;
         ui_settings_refresh();
         return;
     }
-    s_wifi_was_scanning = scanning_now;
+    if (scanning_now) s_wifi_was_scanning = true;
 
     time_t now = time(NULL);
     struct tm tmv;
@@ -1092,7 +1249,12 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     lv_obj_set_height(s_host, LV_SIZE_CONTENT);
     lv_obj_clear_flag(s_host, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_kb = lv_keyboard_create(lv_obj_get_parent(s_container));
+    /* A top-layer keyboard is independent of the scrolling settings viewport. */
+    s_kb = lv_keyboard_create(lv_layer_top());
+    lv_obj_add_flag(s_kb, LV_OBJ_FLAG_FLOATING);
+    lv_obj_remove_flag(s_kb, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+    lv_obj_set_width(s_kb, UI_HOR_RES);
+    lv_obj_add_event_cb(s_kb, kb_done_cb, LV_EVENT_ALL, NULL);
     lv_obj_set_height(s_kb, 320);
     /* Font Inter tự biên của app KHÔNG có dải LV_SYMBOL_* (icon Backspace/
      * Enter...) nên phím đặc biệt sẽ hiện ô chữ nhật đứng trống (tofu) nếu
@@ -1102,7 +1264,7 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     lv_obj_set_style_text_font(s_kb, &lv_font_montserrat_40, 0);
     lv_obj_set_style_pad_row(s_kb, 10, 0);
     lv_obj_set_style_pad_column(s_kb, 8, 0);
-    lv_obj_align(s_kb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_align(s_kb, LV_ALIGN_BOTTOM_MID, 0, -UI_BOTTOMNAV_H);
     lv_obj_add_flag(s_kb, LV_OBJ_FLAG_HIDDEN);
     /* Không cần lv_obj_move_foreground() ở đây — s_kb vừa được tạo nên
      * mặc định đã là con cuối cùng (trên cùng) của cha nó. */
@@ -1112,7 +1274,25 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
 
 void ui_settings_refresh(void)
 {
+    /* Keep unsaved camera edits across unrelated WiFi/printer/theme rebuilds. */
+    char draft_ip[40], draft_port[8], draft_user[64], draft_pass[128], draft_token[1024], draft_rx[8];
+    char draft_rtsp_main[160], draft_rtsp_sub[160];
+    bool draft = s_cam_ip_ta && s_cam_token_ta && s_rx_port_ta;
+    if (draft) {
+        snprintf(draft_ip, sizeof(draft_ip), "%s", lv_textarea_get_text(s_cam_ip_ta));
+        snprintf(draft_port, sizeof(draft_port), "%s", lv_textarea_get_text(s_cam_port_ta));
+        snprintf(draft_user, sizeof(draft_user), "%s", lv_textarea_get_text(s_cam_user_ta));
+        snprintf(draft_pass, sizeof(draft_pass), "%s", lv_textarea_get_text(s_cam_pass_ta));
+        snprintf(draft_token, sizeof(draft_token), "%s", lv_textarea_get_text(s_cam_token_ta));
+        snprintf(draft_rx, sizeof(draft_rx), "%s", lv_textarea_get_text(s_rx_port_ta));
+        snprintf(draft_rtsp_main, sizeof(draft_rtsp_main), "%s", lv_textarea_get_text(s_rtsp_main_ta));
+        snprintf(draft_rtsp_sub, sizeof(draft_rtsp_sub), "%s", lv_textarea_get_text(s_rtsp_sub_ta));
+    }
+    ui_settings_close_keyboard();
     ui_common_clear(s_host);
+    s_wifi_pw_ta = NULL;
+    s_rx_port_ta = s_cam_token_ta = s_rtsp_main_ta = s_rtsp_sub_ta = NULL;
+    s_rx_endpoint = s_rx_status = s_rx_count = s_rx_snapshot = NULL;
     s_print_preview = NULL;
     s_time_now_label = NULL;
     s_time_sync_label = NULL;
@@ -1152,6 +1332,17 @@ void ui_settings_refresh(void)
     build_wifi_section(s_host);
     build_static_ip_section(s_host);
     build_gateway_section(s_host);
+    build_receiver_section(s_host);
+    if (draft) {
+        lv_textarea_set_text(s_cam_ip_ta, draft_ip);
+        lv_textarea_set_text(s_cam_port_ta, draft_port);
+        lv_textarea_set_text(s_cam_user_ta, draft_user);
+        lv_textarea_set_text(s_cam_pass_ta, draft_pass);
+        lv_textarea_set_text(s_cam_token_ta, draft_token);
+        lv_textarea_set_text(s_rx_port_ta, draft_rx);
+        lv_textarea_set_text(s_rtsp_main_ta, draft_rtsp_main);
+        lv_textarea_set_text(s_rtsp_sub_ta, draft_rtsp_sub);
+    }
     build_p5_section(s_host);
     build_printer_section(s_host);
     build_version_section(s_host);

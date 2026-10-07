@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include "wifi_manager.h"
 #include "camera_client.h"
+#include "camera_receiver.h"
 
 /* Tự kiểm tra lại kết nối camera mỗi 20 giây (sau lần "Kết nối" đầu tiên từ
  * Cài đặt) để trạng thái hiển thị ở header + tab Cân là "real-time", không
@@ -140,8 +141,11 @@ void app_state_init(void)
      * xem docs camera Vivoo). Đây KHÔNG phải demo: điền sẵn làm cấu hình
      * mặc định, vẫn sửa được ở Cài đặt. IP/mật khẩu cập nhật theo yêu cầu
      * mới nhất (192.168.1.10 / Vivoo@003). */
-    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "192.168.1.10");
-    s_state.camera_port = 80;
+    camera_receiver_init();
+    camera_config_t camera_cfg;
+    camera_receiver_get_config(&camera_cfg);
+    snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "%s", camera_cfg.ip);
+    s_state.camera_port = camera_cfg.https_port;
     s_state.camera_last_check_us = 0;
 
     snprintf(s_state.fw_version, sizeof(s_state.fw_version), "v1.0.0-dev");
@@ -278,6 +282,11 @@ void app_state_start_weighing(const char *order_id)
     s_state.weighing.p5_state = P5_STATE_LOST;
     s_state.weighing.camera_connected = (s_state.camera_link != LINK_LOST);
     s_state.weighing.reconcile = RECONCILE_NONE;
+    camera_receiver_status_t camera_status;
+    camera_receiver_get_status(&camera_status);
+    s_state.weighing.camera_sequence_at_start = camera_status.sequence;
+    s_state.weighing.camera_sequence_seen = camera_status.sequence;
+    s_state.weighing.camera_session_started_us = esp_timer_get_time();
 
     s_state.current_tab = TAB_WEIGHING;
 }
@@ -290,17 +299,22 @@ void app_state_weighing_set_ticket_type(ticket_type_t t)
 
 void app_state_weighing_manual_input(float weight_kg, int qty)
 {
+    if (!s_state.weighing.active || weight_kg <= 0 || qty <= 0) return;
     s_state.weighing.manual_mode = true;
     s_state.weighing.manual_weight_kg = weight_kg;
-    s_state.weighing.manual_qty = qty;
+    /* Keep a camera event as the source of truth for quantity in this session. */
+    s_state.weighing.manual_qty = s_state.weighing.camera_count_for_session
+                               ? s_state.weighing.snapshot_count : qty;
     s_state.weighing.manual_filled = true;
     s_state.weighing.weight_kg = weight_kg;
     s_state.weighing.p5_state = P5_STATE_MANUAL;
-    s_state.weighing.has_line_count = true;
-    s_state.weighing.line_count = qty;
-    s_state.weighing.has_snapshot_count = true;
-    s_state.weighing.snapshot_count = qty;
-    s_state.weighing.reconcile = RECONCILE_MANUAL;
+    if (!s_state.weighing.camera_count_for_session) {
+        s_state.weighing.has_line_count = true;
+        s_state.weighing.line_count = qty;
+        s_state.weighing.has_snapshot_count = true;
+        s_state.weighing.snapshot_count = qty;
+        s_state.weighing.reconcile = RECONCILE_MANUAL;
+    }
 }
 
 void app_state_weighing_reweigh(void)
@@ -314,6 +328,13 @@ void app_state_weighing_reweigh(void)
     w->reconcile = RECONCILE_NONE;
     w->manual_mode = false;
     w->manual_filled = false;
+    w->camera_count_for_session = false;
+    w->camera_count_received_us = 0;
+    camera_receiver_status_t camera_status;
+    camera_receiver_get_status(&camera_status);
+    w->camera_sequence_at_start = camera_status.sequence;
+    w->camera_sequence_seen = camera_status.sequence;
+    w->camera_session_started_us = esp_timer_get_time();
     /* Chưa có Modbus-TCP thật (xem app_state_start_weighing) nên KHÔNG tự
      * đặt lại "ĐANG ĐỘNG" dù p5_link đã bấm Kết nối — vẫn trung thực là
      * MẤT KẾT NỐI cho tới khi có tích hợp thật. */
@@ -329,7 +350,7 @@ bool app_state_weighing_can_confirm(void)
          * theo luongcan.md mục 4. Chỉ chặn khi CHƯA đủ số liệu. */
     }
     if (w->manual_mode) return w->manual_filled;
-    return w->has_line_count && w->has_snapshot_count && w->p5_state != P5_STATE_LOST;
+    return w->camera_count_for_session && w->has_snapshot_count && w->manual_filled;
 }
 
 void app_state_weighing_confirm(void)
@@ -341,23 +362,19 @@ void app_state_weighing_confirm(void)
 
     o->status = ORDER_DONE;
     o->is_manual_entry = w->manual_mode;
-    o->actual_qty = w->manual_mode ? w->manual_qty
+    o->actual_qty = w->camera_count_for_session ? w->snapshot_count
+                    : w->manual_mode ? w->manual_qty
                     : (w->has_line_count ? w->line_count : w->snapshot_count);
     o->actual_weight_kg = w->weight_kg;
 
-    bool have_network = (s_state.wifi_link != LINK_LOST);
     static int s_receipt_seq = 100;
     s_receipt_seq++;
     snprintf(o->receipt_no, sizeof(o->receipt_no), "PC-20260927-%03d", s_receipt_seq);
 
-    if (have_network) {
-        o->synced = true;
-        o->pending_sync = false;
-    } else {
-        o->synced = false;
-        o->pending_sync = true;
-        s_state.pending_sync_count++;
-    }
+    /* Network reachability is not a backend ACK; no sync API is configured yet. */
+    o->synced = false;
+    o->pending_sync = true;
+    s_state.pending_sync_count++;
 
     /* thêm vào lịch sử */
     if (s_state.history_count < APP_MAX_HISTORY) {
@@ -379,23 +396,40 @@ void app_state_weighing_confirm(void)
 
 void app_state_sync_now(void)
 {
-    for (int i = 0; i < s_state.order_count; i++) {
-        if (s_state.orders[i].pending_sync) {
-            s_state.orders[i].pending_sync = false;
-            s_state.orders[i].synced = true;
-        }
-    }
-    s_state.pending_sync_count = 0;
+    /* Keep queue state until a real backend request returns an ACK. */
 }
 
 /* ── Đồng bộ trạng thái mạng mỗi tick (KHÔNG còn giả lập khối lượng) ─────── */
 static void app_state_wifi_sync(void);
 static void app_state_camera_sync(void);
 
+static void app_state_camera_count_sync(void)
+{
+    weighing_session_t *w = &s_state.weighing;
+    if (!w->active) return;
+    camera_receiver_status_t status;
+    camera_receiver_get_status(&status);
+    if (status.sequence <= w->camera_sequence_seen) return;
+    w->camera_sequence_seen = status.sequence;
+    if (!status.received_us || status.received_us < w->camera_session_started_us) return;
+    w->camera_count_for_session = true;
+    w->camera_count_received_us = status.received_us;
+    w->has_snapshot_count = true;
+    w->snapshot_count = status.latest.count;
+    w->camera_connected = true;
+    if (w->has_line_count) {
+        w->reconcile = w->line_count == w->snapshot_count ? RECONCILE_MATCH : RECONCILE_MISMATCH;
+    } else {
+        w->reconcile = RECONCILE_NONE;
+    }
+    if (w->manual_mode) w->manual_qty = w->snapshot_count;
+}
+
 void app_state_sim_tick(void)
 {
     app_state_wifi_sync();
     app_state_camera_sync();
+    app_state_camera_count_sync();
     /* Trước đây có khối tự tăng w->weight_kg tới mục tiêu giả định
      * (planned_qty * 282.13f) mỗi tick, giả vờ như P5 Scale thật đang gửi
      * số lên — đã bỏ. Chưa có Modbus-TCP client thật (xem ui_settings.c)
@@ -603,6 +637,7 @@ void app_state_camera_test_connect(const char *ip, uint16_t port)
 void app_state_camera_save_config(const char *ip, uint16_t port)
 {
     if (!ip || !ip[0]) return;
+    if (strcmp(s_state.camera_ip, ip) || s_state.camera_port != port) s_state.camera_link = LINK_LOST;
     snprintf(s_state.camera_ip, sizeof(s_state.camera_ip), "%s", ip);
     s_state.camera_port = port;
 }
@@ -618,7 +653,7 @@ bool app_state_camera_is_checking(void)
 static void app_state_camera_sync(void)
 {
     if (!camera_client_is_busy()) {
-        camera_check_result_t r = camera_client_get_result();
+        camera_check_result_t r = camera_client_get_result_for(s_state.camera_ip, s_state.camera_port);
         if (r == CAMERA_CHECK_REACHABLE) s_state.camera_link = LINK_OK;
         else if (r == CAMERA_CHECK_UNREACHABLE) s_state.camera_link = LINK_LOST;
 

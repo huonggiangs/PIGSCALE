@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_http_client.h"
@@ -13,8 +14,11 @@
 
 static const char *TAG = "CAM_CLIENT";
 
-static volatile bool                  s_busy   = false;
-static volatile camera_check_result_t s_result = CAMERA_CHECK_UNKNOWN;
+static atomic_bool s_busy = false;
+static atomic_int s_result = CAMERA_CHECK_UNKNOWN;
+/* Written by the LVGL caller before launch; read only after task completion. */
+static char s_checked_ip[40];
+static uint16_t s_checked_port;
 
 typedef struct {
     char     ip[40];
@@ -41,7 +45,7 @@ static void check_task(void *arg)
         .skip_cert_common_name_check = true,  /* kết nối bằng IP, cert CN sẽ không khớp */
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    esp_err_t err = esp_http_client_perform(client);
+    esp_err_t err = client ? esp_http_client_perform(client) : ESP_ERR_NO_MEM;
 
     /* Bất kỳ phản hồi HTTP nào (kể cả 401/404) đều chứng tỏ camera CÓ TRÊN
      * MẠNG và đang chạy dịch vụ HTTP — đó là tất cả những gì ta có thể xác
@@ -56,7 +60,7 @@ static void check_task(void *arg)
         s_result = CAMERA_CHECK_UNREACHABLE;
     }
 
-    esp_http_client_cleanup(client);
+    if (client) esp_http_client_cleanup(client);
     free(a);
     s_busy = false;
     vTaskDelete(NULL);
@@ -67,16 +71,26 @@ void camera_client_test_async(const char *ip, uint16_t port)
     if (!ip || !ip[0] || s_busy) return;
 
     check_task_arg_t *a = malloc(sizeof(*a));
-    if (!a) return;
+    s_result = CAMERA_CHECK_UNKNOWN;
+    if (!a) { s_result = CAMERA_CHECK_UNREACHABLE; return; }
     snprintf(a->ip, sizeof(a->ip), "%s", ip);
     a->port = port;
+    snprintf(s_checked_ip, sizeof(s_checked_ip), "%s", ip);
+    s_checked_port = port;
 
     s_busy = true;
     if (xTaskCreate(check_task, "cam_check", 4096, a, 4, NULL) != pdPASS) {
         s_busy = false;
+        s_result = CAMERA_CHECK_UNREACHABLE;
         free(a);
     }
 }
 
 bool camera_client_is_busy(void) { return s_busy; }
 camera_check_result_t camera_client_get_result(void) { return s_result; }
+
+camera_check_result_t camera_client_get_result_for(const char *ip, uint16_t port)
+{
+    if (s_busy || port != s_checked_port || strcmp(ip, s_checked_ip)) return CAMERA_CHECK_UNKNOWN;
+    return s_result;
+}

@@ -6,4 +6,4 @@ cmake_minimum_required(VERSION 3.16)
 # ==============================================================================
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(can_may_xuc_v3)
+project(pig_weigh)
